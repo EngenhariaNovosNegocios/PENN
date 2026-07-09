@@ -23,7 +23,7 @@ feito em etapas futuras.
 
 ## Pré-requisitos
 
-- [Node.js](https://nodejs.org/) versão 18 ou superior (inclui o `npm`)
+- [Node.js](https://nodejs.org/) versão 20.9 ou superior (inclui o `npm`)
 - [Git](https://git-scm.com/)
 
 Para verificar se já tem o Node instalado, rode no terminal:
