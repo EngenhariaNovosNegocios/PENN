@@ -1,6 +1,24 @@
 alter table public.products
 add column if not exists ncm text;
 
+alter table public.products
+add column if not exists sap_material_code text;
+
+alter table public.products
+add column if not exists sap_plant text;
+
+alter table public.products
+add column if not exists sap_unit text;
+
+alter table public.products
+add column if not exists sap_material_group text;
+
+alter table public.products
+add column if not exists sync_source text not null default 'manual';
+
+alter table public.products
+add column if not exists last_sync_at timestamptz;
+
 create table if not exists public.ncm_taxes (
   id bigint primary key generated always as identity,
   ncm text not null unique,
@@ -34,18 +52,21 @@ alter table public.product_structure_items enable row level security;
 alter table public.product_issues enable row level security;
 alter table public.ncm_taxes enable row level security;
 
-grant select, insert on public.product_structure_items to anon;
-grant select, insert, delete on public.product_issues to anon;
+grant select, insert, delete on public.product_structure_items to anon;
+grant select, insert, update, delete on public.product_issues to anon;
 grant select on public.ncm_taxes to anon;
-grant update on public.products to anon;
+grant update, delete on public.products to anon;
 
 drop policy if exists "ncm_taxes_select" on public.ncm_taxes;
 drop policy if exists "product_structure_items_select" on public.product_structure_items;
 drop policy if exists "product_structure_items_insert" on public.product_structure_items;
+drop policy if exists "product_structure_items_delete" on public.product_structure_items;
 drop policy if exists "product_issues_select" on public.product_issues;
 drop policy if exists "product_issues_insert" on public.product_issues;
+drop policy if exists "product_issues_update" on public.product_issues;
 drop policy if exists "product_issues_delete" on public.product_issues;
 drop policy if exists "products_update_status" on public.products;
+drop policy if exists "products_delete" on public.products;
 
 create policy "ncm_taxes_select"
 on public.ncm_taxes
@@ -65,6 +86,12 @@ for insert
 to anon
 with check (true);
 
+create policy "product_structure_items_delete"
+on public.product_structure_items
+for delete
+to anon
+using (true);
+
 create policy "product_issues_select"
 on public.product_issues
 for select
@@ -75,6 +102,13 @@ create policy "product_issues_insert"
 on public.product_issues
 for insert
 to anon
+with check (true);
+
+create policy "product_issues_update"
+on public.product_issues
+for update
+to anon
+using (true)
 with check (true);
 
 create policy "product_issues_delete"
@@ -89,3 +123,9 @@ for update
 to anon
 using (true)
 with check (true);
+
+create policy "products_delete"
+on public.products
+for delete
+to anon
+using (true);

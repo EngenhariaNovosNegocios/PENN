@@ -7,6 +7,10 @@
   --muted: #667587;
   --primary: #2454a6;
   --primary-dark: #1b3f7d;
+  --danger: #b42318;
+  --danger-bg: #fff0ed;
+  --success: #1f7a4d;
+  --success-bg: #e8f7ef;
   --green-bg: #e7f6ed;
   --green-text: #17633a;
   --amber-bg: #fff4d8;
@@ -40,9 +44,9 @@ button {
 }
 
 .workspace {
-  max-width: 1180px;
+  max-width: 1240px;
   margin: 0 auto;
-  padding: 32px 18px 48px;
+  padding: 28px 18px 48px;
 }
 
 .page-header {
@@ -55,8 +59,8 @@ button {
 
 .page-header h1 {
   margin: 6px 0 8px;
-  font-size: clamp(2rem, 4vw, 3.4rem);
-  line-height: 1;
+  font-size: 2.15rem;
+  line-height: 1.08;
   letter-spacing: 0;
 }
 
@@ -77,7 +81,7 @@ button {
 
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 18px;
 }
@@ -87,11 +91,20 @@ button {
   grid-template-columns: auto auto 1fr;
   align-items: center;
   gap: 8px;
+  width: 100%;
   min-height: 64px;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 8px;
+  color: var(--text);
   padding: 14px 16px;
+  text-align: left;
+}
+
+.summary-item:hover,
+.summary-item.selected {
+  border-color: var(--primary);
+  box-shadow: 0 8px 20px rgba(36, 84, 166, 0.08);
 }
 
 .summary-item strong {
@@ -125,9 +138,13 @@ button {
   background: #6d7885;
 }
 
+.status-dot.issue {
+  background: var(--danger);
+}
+
 .product-layout {
   display: grid;
-  grid-template-columns: minmax(280px, 380px) 1fr;
+  grid-template-columns: minmax(300px, 390px) 1fr;
   gap: 18px;
   align-items: start;
 }
@@ -136,6 +153,7 @@ button {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 8px;
+  box-shadow: 0 12px 30px rgba(23, 33, 43, 0.05);
 }
 
 .panel-heading {
@@ -163,7 +181,30 @@ button {
   padding: 12px;
 }
 
+.list-controls {
+  display: grid;
+  gap: 10px;
+  padding: 14px 14px 6px;
+}
+
+.list-controls input,
+.list-controls select {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--text);
+  padding: 10px 11px;
+}
+
+.message-stack {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
 .feedback-message,
+.success-message,
 .empty-state {
   color: var(--muted);
   line-height: 1.5;
@@ -172,8 +213,17 @@ button {
 }
 
 .feedback-message {
-  color: #9a3412;
-  border-bottom: 1px solid var(--border);
+  background: var(--danger-bg);
+  border: 1px solid #ffc9c0;
+  border-radius: 8px;
+  color: var(--danger);
+}
+
+.success-message {
+  background: var(--success-bg);
+  border: 1px solid #b9e6cc;
+  border-radius: 8px;
+  color: var(--success);
 }
 
 .product-row {
@@ -183,9 +233,9 @@ button {
   gap: 12px;
   width: 100%;
   min-height: 72px;
-  border: 1px solid transparent;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: transparent;
+  background: #ffffff;
   color: var(--text);
   padding: 12px;
   text-align: left;
@@ -194,7 +244,7 @@ button {
 .product-row:hover,
 .product-row.selected {
   background: var(--panel-soft);
-  border-color: var(--border);
+  border-color: var(--primary);
 }
 
 .product-row strong,
@@ -205,6 +255,32 @@ button {
 .product-row small {
   color: var(--muted);
   margin-top: 4px;
+}
+
+.row-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.issue-count,
+.quantity-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  min-height: 28px;
+  border-radius: 999px;
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 4px 8px;
+}
+
+.quantity-pill {
+  background: var(--blue-bg);
+  color: var(--blue-text);
 }
 
 .status-badge {
@@ -250,6 +326,14 @@ button {
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 22px;
+}
+
+.detail-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .detail-top h2 {
@@ -311,22 +395,26 @@ button {
 .detail-tabs {
   display: flex;
   gap: 8px;
+  background: var(--panel-soft);
+  border: 1px solid var(--border);
+  border-radius: 8px;
   margin-bottom: 20px;
-  border-bottom: 1px solid var(--border);
+  padding: 6px;
 }
 
 .detail-tabs button {
   min-height: 40px;
   border: 0;
-  border-bottom: 2px solid transparent;
+  border-radius: 7px;
   background: transparent;
   color: var(--muted);
   font-weight: 700;
-  padding: 0 12px;
+  padding: 0 14px;
 }
 
 .detail-tabs button.active {
-  border-color: var(--primary);
+  background: #ffffff;
+  box-shadow: 0 4px 12px rgba(23, 33, 43, 0.08);
   color: var(--primary);
 }
 
@@ -384,6 +472,31 @@ button {
   opacity: 0.65;
 }
 
+.danger-button,
+.ghost-danger-button {
+  min-height: 38px;
+  border-radius: 8px;
+  font-weight: 700;
+  padding: 0 12px;
+}
+
+.danger-button {
+  border: 1px solid var(--danger);
+  background: var(--danger);
+  color: #ffffff;
+}
+
+.ghost-danger-button {
+  border: 1px solid #ffc9c0;
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.danger-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
 .data-list {
   display: grid;
   gap: 8px;
@@ -391,7 +504,7 @@ button {
 
 .data-row {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr auto auto;
   gap: 12px;
   align-items: center;
   min-height: 58px;
@@ -439,6 +552,12 @@ button {
 
 .form-panel {
   margin-top: 18px;
+}
+
+.edit-product-form {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-soft);
 }
 
 .product-form {
@@ -496,7 +615,8 @@ button {
   background: var(--primary-dark);
 }
 
-.form-actions button:disabled {
+.form-actions button:disabled,
+.issue-row button:disabled {
   cursor: not-allowed;
   opacity: 0.65;
 }
@@ -506,6 +626,7 @@ button {
   .product-layout,
   .detail-grid,
   .tax-grid,
+  .data-row,
   .compact-form,
   .compact-form.issue-form,
   .product-form {
@@ -553,6 +674,11 @@ button {
 
   .product-row {
     grid-template-columns: 1fr;
+  }
+
+  .row-badges,
+  .detail-actions {
+    justify-content: flex-start;
   }
 
   .detail-tabs {

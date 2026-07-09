@@ -29,6 +29,12 @@ const initialProducts = [
     code: "PENN-001",
     category: "Produto tecnico",
     ncm: "8412.21.10",
+    sap_material_code: "PENN-001",
+    sap_plant: "1000",
+    sap_unit: "UN",
+    sap_material_group: "HID",
+    sync_source: "manual",
+    last_sync_at: null,
     owner: "Engenharia",
     status: "ativo",
     characteristics: "Conjunto sob demanda com componentes dimensionados por aplicacao.",
@@ -40,6 +46,12 @@ const initialProducts = [
     code: "PENN-002",
     category: "Sistema montado",
     ncm: "8537.10.90",
+    sap_material_code: "PENN-002",
+    sap_plant: "1000",
+    sap_unit: "UN",
+    sap_material_group: "ELE",
+    sync_source: "manual",
+    last_sync_at: null,
     owner: "Novos Negocios",
     status: "manutencao",
     characteristics: "Produto com configuracao eletrica variavel conforme requisito do cliente.",
@@ -52,6 +64,11 @@ const emptyForm = {
   code: "",
   category: "",
   ncm: "",
+  sap_material_code: "",
+  sap_plant: "",
+  sap_unit: "",
+  sap_material_group: "",
+  sync_source: "manual",
   owner: "",
   status: "ativo",
   characteristics: "",
@@ -69,7 +86,7 @@ const emptyIssueForm = {
 };
 
 const productColumns =
-  "id, name, code, category, ncm, owner, status, characteristics, structure, created_at";
+  "id, name, code, category, ncm, sap_material_code, sap_plant, sap_unit, sap_material_group, sync_source, last_sync_at, owner, status, characteristics, structure, created_at";
 
 const structureColumns =
   "id, product_id, material_code, description, quantity, created_at";
@@ -80,21 +97,46 @@ const issueColumns =
 const ncmTaxColumns =
   "id, ncm, description, ipi_rate, pis_rate, cofins_rate, icms_rate, import_tax_rate, updated_at";
 
+const tabs = [
+  { id: "overview", label: "Resumo" },
+  { id: "edit", label: "Editar" },
+  { id: "sap", label: "SAP" },
+  { id: "structure", label: "Estrutura" },
+  { id: "issues", label: "Problemas" },
+  { id: "fiscal", label: "Fiscal" },
+];
+
+function normalizeNcm(value) {
+  return value?.replace(/\D/g, "") ?? "";
+}
+
+function formatRate(value) {
+  return `${Number(value ?? 0).toLocaleString("pt-BR", {
+    maximumFractionDigits: 2,
+  })}%`;
+}
+
 export default function ProductManager() {
   const [products, setProducts] = useState([]);
   const [structureItems, setStructureItems] = useState([]);
   const [issues, setIssues] = useState([]);
   const [ncmTaxes, setNcmTaxes] = useState([]);
   const [form, setForm] = useState(emptyForm);
+  const [editForm, setEditForm] = useState(emptyForm);
   const [structureForm, setStructureForm] = useState(emptyStructureForm);
   const [issueForm, setIssueForm] = useState(emptyIssueForm);
   const [selectedId, setSelectedId] = useState(null);
-  const [activeTab, setActiveTab] = useState("details");
+  const [activeTab, setActiveTab] = useState("overview");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("todos");
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [isDeletingProduct, setIsDeletingProduct] = useState(false);
   const [isAddingStructure, setIsAddingStructure] = useState(false);
   const [isAddingIssue, setIsAddingIssue] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   useEffect(() => {
     async function loadProducts() {
@@ -117,10 +159,10 @@ export default function ProductManager() {
       }
 
       const loadedProducts = data ?? [];
-      const details = await loadProductDetails(
-        loadedProducts.map((product) => product.id)
-      );
-      await loadNcmTaxes();
+      const [details] = await Promise.all([
+        loadProductDetails(loadedProducts.map((product) => product.id)),
+        loadNcmTaxes(),
+      ]);
       const productsWithIssueStatus = loadedProducts.map((product) =>
         details.issues.some((issue) => issue.product_id === product.id)
           ? { ...product, status: "manutencao" }
@@ -134,6 +176,33 @@ export default function ProductManager() {
 
     loadProducts();
   }, []);
+
+  const selectedProduct = useMemo(
+    () => products.find((product) => product.id === selectedId) ?? products[0],
+    [products, selectedId]
+  );
+
+  useEffect(() => {
+    if (!selectedProduct) {
+      setEditForm(emptyForm);
+      return;
+    }
+
+    setEditForm({
+      name: selectedProduct.name ?? "",
+      code: selectedProduct.code ?? "",
+      category: selectedProduct.category ?? "",
+      ncm: selectedProduct.ncm ?? "",
+      sap_material_code: selectedProduct.sap_material_code ?? "",
+      sap_plant: selectedProduct.sap_plant ?? "",
+      sap_unit: selectedProduct.sap_unit ?? "",
+      sap_material_group: selectedProduct.sap_material_group ?? "",
+      sync_source: selectedProduct.sync_source ?? "manual",
+      owner: selectedProduct.owner ?? "",
+      status: selectedProduct.status ?? "ativo",
+      characteristics: selectedProduct.characteristics ?? "",
+    });
+  }, [selectedProduct]);
 
   async function loadProductDetails(productIds) {
     if (productIds.length === 0) {
@@ -176,11 +245,6 @@ export default function ProductManager() {
     }
   }
 
-  const selectedProduct = useMemo(
-    () => products.find((product) => product.id === selectedId) ?? products[0],
-    [products, selectedId]
-  );
-
   const selectedStructureItems = useMemo(
     () =>
       structureItems.filter(
@@ -195,16 +259,40 @@ export default function ProductManager() {
   );
 
   const selectedNcmTax = useMemo(() => {
-    const selectedNcm = selectedProduct?.ncm?.replace(/\D/g, "");
+    const selectedNcm = normalizeNcm(selectedProduct?.ncm);
 
     if (!selectedNcm) {
       return null;
     }
 
     return (
-      ncmTaxes.find((tax) => tax.ncm.replace(/\D/g, "") === selectedNcm) ?? null
+      ncmTaxes.find((tax) => normalizeNcm(tax.ncm) === selectedNcm) ?? null
     );
   }, [ncmTaxes, selectedProduct]);
+
+  const filteredProducts = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+
+    return products.filter((product) => {
+      const matchesStatus =
+        statusFilter === "todos" || product.status === statusFilter;
+      const searchable = [
+        product.name,
+        product.code,
+        product.category,
+        product.owner,
+        product.ncm,
+        product.sap_material_code,
+        product.sap_plant,
+        product.sap_material_group,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return matchesStatus && (!query || searchable.includes(query));
+    });
+  }, [products, searchTerm, statusFilter]);
 
   const statusTotals = useMemo(
     () =>
@@ -215,20 +303,39 @@ export default function ProductManager() {
     [products]
   );
 
-  function updateField(event) {
-    const { name, value } = event.target;
-    setForm((current) => ({ ...current, [name]: value }));
+  const openIssueTotal = issues.length;
+
+  function countIssues(productId) {
+    return issues.filter((issue) => issue.product_id === productId).length;
   }
 
-  function updateStructureField(event) {
-    const { name, value } = event.target;
-    setStructureForm((current) => ({ ...current, [name]: value }));
+  function showSuccess(message) {
+    setSuccessMessage(message);
+    window.setTimeout(() => setSuccessMessage(""), 2600);
   }
 
-  function updateIssueField(event) {
-    const { name, value } = event.target;
-    setIssueForm((current) => ({ ...current, [name]: value }));
+  function openTab(tabId) {
+    setActiveTab(tabId);
+
+    if (tabId === "issues" && selectedProduct && !issueForm.productCode) {
+      setIssueForm((current) => ({
+        ...current,
+        productCode: selectedProduct.code,
+      }));
+    }
   }
+
+  function updateFormField(setter) {
+    return function handleUpdateField(event) {
+      const { name, value } = event.target;
+      setter((current) => ({ ...current, [name]: value }));
+    };
+  }
+
+  const updateField = updateFormField(setForm);
+  const updateEditField = updateFormField(setEditForm);
+  const updateStructureField = updateFormField(setStructureForm);
+  const updateIssueField = updateFormField(setIssueForm);
 
   function updateProductStatus(productId, status) {
     setProducts((current) =>
@@ -240,7 +347,15 @@ export default function ProductManager() {
 
   async function saveProductStatus(productId, status) {
     updateProductStatus(productId, status);
-    await supabase.from("products").update({ status }).eq("id", productId);
+
+    const { error } = await supabase
+      .from("products")
+      .update({ status })
+      .eq("id", productId);
+
+    if (error) {
+      setErrorMessage(`Nao foi possivel atualizar o status: ${error.message}`);
+    }
   }
 
   async function addProduct(event) {
@@ -252,11 +367,17 @@ export default function ProductManager() {
       code: form.code.trim(),
       category: form.category.trim(),
       ncm: form.ncm.trim(),
+      sap_material_code: form.sap_material_code.trim(),
+      sap_plant: form.sap_plant.trim(),
+      sap_unit: form.sap_unit.trim(),
+      sap_material_group: form.sap_material_group.trim(),
+      sync_source: form.sync_source,
       owner: form.owner.trim(),
       characteristics: form.characteristics.trim(),
     };
 
     if (!nextProduct.name || !nextProduct.code) {
+      setErrorMessage("Informe pelo menos o nome e o codigo do produto.");
       return;
     }
 
@@ -279,9 +400,123 @@ export default function ProductManager() {
 
     setProducts((current) => [data, ...current]);
     setSelectedId(data.id);
-    setActiveTab("details");
+    setActiveTab("overview");
     setForm(emptyForm);
     setIsSubmitting(false);
+    showSuccess("Produto cadastrado.");
+  }
+
+  async function updateSelectedProduct(event) {
+    event.preventDefault();
+
+    if (!selectedProduct) {
+      return;
+    }
+
+    const updatedProduct = {
+      name: editForm.name.trim(),
+      code: editForm.code.trim(),
+      category: editForm.category.trim(),
+      ncm: editForm.ncm.trim(),
+      sap_material_code: editForm.sap_material_code.trim(),
+      sap_plant: editForm.sap_plant.trim(),
+      sap_unit: editForm.sap_unit.trim(),
+      sap_material_group: editForm.sap_material_group.trim(),
+      sync_source: editForm.sync_source,
+      owner: editForm.owner.trim(),
+      characteristics: editForm.characteristics.trim(),
+    };
+
+    if (!updatedProduct.name || !updatedProduct.code) {
+      setErrorMessage("Informe pelo menos o nome e o codigo do produto.");
+      return;
+    }
+
+    setIsSavingEdit(true);
+    setErrorMessage("");
+
+    const { data, error } = await supabase
+      .from("products")
+      .update(updatedProduct)
+      .eq("id", selectedProduct.id)
+      .select(productColumns)
+      .single();
+
+    if (error) {
+      setErrorMessage(`Nao foi possivel salvar o produto: ${error.message}`);
+      setIsSavingEdit(false);
+      return;
+    }
+
+    const finalProduct =
+      selectedIssues.length > 0 ? { ...data, status: "manutencao" } : data;
+
+    setProducts((current) =>
+      current.map((product) =>
+        product.id === selectedProduct.id ? finalProduct : product
+      )
+    );
+
+    if (selectedProduct.code !== finalProduct.code) {
+      await supabase
+        .from("product_issues")
+        .update({ product_code: finalProduct.code })
+        .eq("product_id", finalProduct.id);
+      setIssues((current) =>
+        current.map((issue) =>
+          issue.product_id === finalProduct.id
+            ? { ...issue, product_code: finalProduct.code }
+            : issue
+        )
+      );
+    }
+
+    setIsSavingEdit(false);
+    showSuccess("Produto atualizado.");
+  }
+
+  async function deleteSelectedProduct() {
+    if (!selectedProduct) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Excluir o produto ${selectedProduct.code}? Essa acao tambem remove estrutura e problemas vinculados.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setIsDeletingProduct(true);
+    setErrorMessage("");
+
+    const { error } = await supabase
+      .from("products")
+      .delete()
+      .eq("id", selectedProduct.id);
+
+    if (error) {
+      setErrorMessage(`Nao foi possivel excluir o produto: ${error.message}`);
+      setIsDeletingProduct(false);
+      return;
+    }
+
+    const remainingProducts = products.filter(
+      (product) => product.id !== selectedProduct.id
+    );
+
+    setProducts(remainingProducts);
+    setStructureItems((current) =>
+      current.filter((item) => item.product_id !== selectedProduct.id)
+    );
+    setIssues((current) =>
+      current.filter((issue) => issue.product_id !== selectedProduct.id)
+    );
+    setSelectedId(remainingProducts[0]?.id ?? null);
+    setActiveTab("overview");
+    setIsDeletingProduct(false);
+    showSuccess("Produto excluido.");
   }
 
   async function addStructureItem(event) {
@@ -304,6 +539,7 @@ export default function ProductManager() {
       !Number.isFinite(nextStructureItem.quantity) ||
       nextStructureItem.quantity <= 0
     ) {
+      setErrorMessage("Informe codigo, descricao e quantidade valida.");
       return;
     }
 
@@ -327,6 +563,26 @@ export default function ProductManager() {
     setStructureItems((current) => [data, ...current]);
     setStructureForm(emptyStructureForm);
     setIsAddingStructure(false);
+    showSuccess("Item adicionado a estrutura.");
+  }
+
+  async function deleteStructureItem(itemId) {
+    setErrorMessage("");
+
+    const { error } = await supabase
+      .from("product_structure_items")
+      .delete()
+      .eq("id", itemId);
+
+    if (error) {
+      setErrorMessage(`Nao foi possivel excluir o item: ${error.message}`);
+      return;
+    }
+
+    setStructureItems((current) =>
+      current.filter((structureItem) => structureItem.id !== itemId)
+    );
+    showSuccess("Item removido da estrutura.");
   }
 
   async function addIssue(event) {
@@ -367,9 +623,10 @@ export default function ProductManager() {
     setIssues((current) => [data, ...current]);
     setSelectedId(issueProduct.id);
     setActiveTab("issues");
-    setIssueForm(emptyIssueForm);
+    setIssueForm({ productCode: issueProduct.code, description: "" });
     await saveProductStatus(issueProduct.id, "manutencao");
     setIsAddingIssue(false);
+    showSuccess("Problema registrado.");
   }
 
   async function resolveIssue(issue) {
@@ -397,6 +654,8 @@ export default function ProductManager() {
     if (remainingIssues.length === 0) {
       await saveProductStatus(issue.product_id, "ativo");
     }
+
+    showSuccess("Problema resolvido.");
   }
 
   return (
@@ -406,61 +665,117 @@ export default function ProductManager() {
           <p className="eyebrow">Portal Engenharia de Novos Negocios</p>
           <h1>Gerenciamento de produtos</h1>
           <p>
-            Cadastre os produtos trabalhados pelo setor, acompanhe o status e
-            consulte as principais caracteristicas, estruturas e pendencias de
-            cada item.
+            Cadastre, acompanhe e mantenha os dados tecnicos, fiscais e
+            operacionais de cada produto.
           </p>
         </div>
       </header>
 
-      <section className="summary-grid" aria-label="Resumo por status">
+      <section className="summary-grid" aria-label="Resumo operacional">
         {Object.entries(statusOptions).map(([status, option]) => (
-          <div className="summary-item" key={status}>
+          <button
+            className={`summary-item ${
+              statusFilter === status ? "selected" : ""
+            }`}
+            key={status}
+            onClick={() =>
+              setStatusFilter(statusFilter === status ? "todos" : status)
+            }
+            type="button"
+          >
             <span className={`status-dot ${status}`} />
             <strong>{statusTotals[status] ?? 0}</strong>
             <span>{option.label}</span>
-          </div>
+          </button>
         ))}
+        <div className="summary-item issue-summary">
+          <span className="status-dot issue" />
+          <strong>{openIssueTotal}</strong>
+          <span>Problemas abertos</span>
+        </div>
       </section>
+
+      {(errorMessage || successMessage) && (
+        <section className="message-stack" aria-live="polite">
+          {errorMessage && <p className="feedback-message">{errorMessage}</p>}
+          {successMessage && <p className="success-message">{successMessage}</p>}
+        </section>
+      )}
 
       <section className="product-layout">
         <aside className="panel product-list" aria-label="Lista de produtos">
           <div className="panel-heading">
             <h2>Produtos</h2>
-            <span>{isLoading ? "Carregando" : `${products.length} cadastrados`}</span>
+            <span>
+              {isLoading
+                ? "Carregando"
+                : `${filteredProducts.length} de ${products.length}`}
+            </span>
           </div>
 
-          {errorMessage && <p className="feedback-message">{errorMessage}</p>}
+          <div className="list-controls">
+            <input
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Buscar por nome, codigo, SAP, NCM..."
+              type="search"
+              value={searchTerm}
+            />
+            <select
+              onChange={(event) => setStatusFilter(event.target.value)}
+              value={statusFilter}
+            >
+              <option value="todos">Todos os status</option>
+              {Object.entries(statusOptions).map(([value, option]) => (
+                <option key={value} value={value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
 
           <div className="product-list-items">
-            {products.map((product) => (
-              <button
-                className={`product-row ${
-                  product.id === selectedProduct?.id ? "selected" : ""
-                }`}
-                key={product.id}
-                onClick={() => setSelectedId(product.id)}
-                type="button"
-              >
-                <span>
-                  <strong>{product.name}</strong>
-                  <small>
-                    {product.code} - {product.category || "Sem categoria"}
-                  </small>
-                </span>
-                <span className={`status-badge ${product.status}`}>
-                  {statusOptions[product.status]?.label ?? product.status}
-                </span>
-              </button>
-            ))}
+            {filteredProducts.map((product) => {
+              const productIssueCount = countIssues(product.id);
 
-            {!isLoading && products.length === 0 && (
-              <p className="empty-state">Nenhum produto cadastrado ainda.</p>
+              return (
+                <button
+                  className={`product-row ${
+                    product.id === selectedProduct?.id ? "selected" : ""
+                  }`}
+                  key={product.id}
+                  onClick={() => setSelectedId(product.id)}
+                  type="button"
+                >
+                  <span>
+                    <strong>{product.name}</strong>
+                    <small>
+                      {product.code} - {product.category || "Sem categoria"}
+                    </small>
+                    {product.ncm && <small>NCM {product.ncm}</small>}
+                  </span>
+                  <span className="row-badges">
+                    {productIssueCount > 0 && (
+                      <span className="issue-count">{productIssueCount}</span>
+                    )}
+                    <span className={`status-badge ${product.status}`}>
+                      {statusOptions[product.status]?.label ?? product.status}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+
+            {!isLoading && filteredProducts.length === 0 && (
+              <p className="empty-state">Nenhum produto encontrado.</p>
             )}
           </div>
         </aside>
 
         <section className="panel product-detail" aria-label="Detalhes do produto">
+          {!selectedProduct && (
+            <p className="empty-state">Cadastre ou selecione um produto.</p>
+          )}
+
           {selectedProduct && (
             <>
               <div className="detail-top">
@@ -468,38 +783,37 @@ export default function ProductManager() {
                   <span className="muted-label">{selectedProduct.code}</span>
                   <h2>{selectedProduct.name}</h2>
                 </div>
-                <span className={`status-badge ${selectedProduct.status}`}>
-                  {statusOptions[selectedProduct.status]?.label ??
-                    selectedProduct.status}
-                </span>
+                <div className="detail-actions">
+                  <span className={`status-badge ${selectedProduct.status}`}>
+                    {statusOptions[selectedProduct.status]?.label ??
+                      selectedProduct.status}
+                  </span>
+                  <button
+                    className="danger-button"
+                    disabled={isDeletingProduct}
+                    onClick={deleteSelectedProduct}
+                    type="button"
+                  >
+                    {isDeletingProduct ? "Excluindo..." : "Excluir produto"}
+                  </button>
+                </div>
               </div>
 
               <div className="detail-tabs" role="tablist" aria-label="Dados do produto">
-                <button
-                  className={activeTab === "details" ? "active" : ""}
-                  onClick={() => setActiveTab("details")}
-                  type="button"
-                >
-                  Detalhes
-                </button>
-                <button
-                  className={activeTab === "structure" ? "active" : ""}
-                  onClick={() => setActiveTab("structure")}
-                  type="button"
-                >
-                  Estrutura
-                </button>
-                <button
-                  className={activeTab === "issues" ? "active" : ""}
-                  onClick={() => setActiveTab("issues")}
-                  type="button"
-                >
-                  Problemas
-                </button>
+                {tabs.map((tab) => (
+                  <button
+                    className={activeTab === tab.id ? "active" : ""}
+                    key={tab.id}
+                    onClick={() => openTab(tab.id)}
+                    type="button"
+                  >
+                    {tab.label}
+                  </button>
+                ))}
               </div>
 
-              {activeTab === "details" && (
-                <>
+              {activeTab === "overview" && (
+                <section className="tab-panel" aria-label="Resumo do produto">
                   <dl className="detail-grid">
                     <div>
                       <dt>Categoria</dt>
@@ -510,8 +824,22 @@ export default function ProductManager() {
                       <dd>{selectedProduct.ncm || "Nao informado"}</dd>
                     </div>
                     <div>
+                      <dt>Codigo SAP</dt>
+                      <dd>
+                        {selectedProduct.sap_material_code || "Nao vinculado"}
+                      </dd>
+                    </div>
+                    <div>
                       <dt>Responsavel</dt>
                       <dd>{selectedProduct.owner || "Nao informado"}</dd>
+                    </div>
+                    <div>
+                      <dt>Estrutura</dt>
+                      <dd>{selectedStructureItems.length} itens</dd>
+                    </div>
+                    <div>
+                      <dt>Problemas</dt>
+                      <dd>{selectedIssues.length} abertos</dd>
                     </div>
                     <div>
                       <dt>Status</dt>
@@ -529,43 +857,180 @@ export default function ProductManager() {
                         "Sem caracteristicas cadastradas."}
                     </p>
                   </div>
+                </section>
+              )}
+
+              {activeTab === "edit" && (
+                <section className="tab-panel" aria-label="Edicao do produto">
+                  <form
+                    className="product-form edit-product-form"
+                    onSubmit={updateSelectedProduct}
+                  >
+                    <label>
+                      Nome do produto
+                      <input
+                        name="name"
+                        onChange={updateEditField}
+                        required
+                        value={editForm.name}
+                      />
+                    </label>
+
+                    <label>
+                      Codigo
+                      <input
+                        name="code"
+                        onChange={updateEditField}
+                        required
+                        value={editForm.code}
+                      />
+                    </label>
+
+                    <label>
+                      Categoria
+                      <input
+                        name="category"
+                        onChange={updateEditField}
+                        value={editForm.category}
+                      />
+                    </label>
+
+                    <label>
+                      NCM
+                      <input
+                        inputMode="numeric"
+                        name="ncm"
+                        onChange={updateEditField}
+                        value={editForm.ncm}
+                      />
+                    </label>
+
+                    <label>
+                      Codigo SAP
+                      <input
+                        name="sap_material_code"
+                        onChange={updateEditField}
+                        value={editForm.sap_material_code}
+                      />
+                    </label>
+
+                    <label>
+                      Centro SAP
+                      <input
+                        name="sap_plant"
+                        onChange={updateEditField}
+                        value={editForm.sap_plant}
+                      />
+                    </label>
+
+                    <label>
+                      Unidade
+                      <input
+                        name="sap_unit"
+                        onChange={updateEditField}
+                        value={editForm.sap_unit}
+                      />
+                    </label>
+
+                    <label>
+                      Grupo mercadorias
+                      <input
+                        name="sap_material_group"
+                        onChange={updateEditField}
+                        value={editForm.sap_material_group}
+                      />
+                    </label>
+
+                    <label>
+                      Responsavel
+                      <input
+                        name="owner"
+                        onChange={updateEditField}
+                        value={editForm.owner}
+                      />
+                    </label>
+
+                    <label>
+                      Origem
+                      <select
+                        name="sync_source"
+                        onChange={updateEditField}
+                        value={editForm.sync_source}
+                      >
+                        <option value="manual">Manual</option>
+                        <option value="sap">SAP</option>
+                        <option value="importacao">Importacao</option>
+                      </select>
+                    </label>
+
+                    <label className="wide-field">
+                      Caracteristicas
+                      <textarea
+                        name="characteristics"
+                        onChange={updateEditField}
+                        rows="4"
+                        value={editForm.characteristics}
+                      />
+                    </label>
+
+                    <div className="form-actions">
+                      <button disabled={isSavingEdit} type="submit">
+                        {isSavingEdit ? "Salvando..." : "Salvar alteracoes"}
+                      </button>
+                    </div>
+                  </form>
+                </section>
+              )}
+
+              {activeTab === "sap" && (
+                <section className="tab-panel" aria-label="Dados SAP">
+                  <dl className="detail-grid sap-grid">
+                    <div>
+                      <dt>Codigo material SAP</dt>
+                      <dd>
+                        {selectedProduct.sap_material_code || "Nao vinculado"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Centro</dt>
+                      <dd>{selectedProduct.sap_plant || "Nao informado"}</dd>
+                    </div>
+                    <div>
+                      <dt>Unidade</dt>
+                      <dd>{selectedProduct.sap_unit || "Nao informado"}</dd>
+                    </div>
+                    <div>
+                      <dt>Grupo mercadorias</dt>
+                      <dd>
+                        {selectedProduct.sap_material_group || "Nao informado"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Origem dos dados</dt>
+                      <dd>{selectedProduct.sync_source || "manual"}</dd>
+                    </div>
+                    <div>
+                      <dt>Ultima sincronizacao</dt>
+                      <dd>
+                        {selectedProduct.last_sync_at
+                          ? new Date(
+                              selectedProduct.last_sync_at
+                            ).toLocaleString("pt-BR")
+                          : "Nunca sincronizado"}
+                      </dd>
+                    </div>
+                  </dl>
 
                   <div className="text-block">
-                    <h3>Impostos por NCM</h3>
-                    {selectedNcmTax ? (
-                      <>
-                        <p>{selectedNcmTax.description}</p>
-                        <dl className="tax-grid">
-                          <div>
-                            <dt>IPI</dt>
-                            <dd>{selectedNcmTax.ipi_rate ?? 0}%</dd>
-                          </div>
-                          <div>
-                            <dt>PIS</dt>
-                            <dd>{selectedNcmTax.pis_rate ?? 0}%</dd>
-                          </div>
-                          <div>
-                            <dt>COFINS</dt>
-                            <dd>{selectedNcmTax.cofins_rate ?? 0}%</dd>
-                          </div>
-                          <div>
-                            <dt>ICMS</dt>
-                            <dd>{selectedNcmTax.icms_rate ?? 0}%</dd>
-                          </div>
-                          <div>
-                            <dt>II</dt>
-                            <dd>{selectedNcmTax.import_tax_rate ?? 0}%</dd>
-                          </div>
-                        </dl>
-                      </>
-                    ) : (
-                      <p>
-                        Nenhuma regra de imposto cadastrada para este NCM no
-                        Supabase.
-                      </p>
-                    )}
+                    <h3>Orientacao de integracao</h3>
+                    <p>
+                      Use o SAP como fonte mestre para codigo material, centro,
+                      unidade, grupo de mercadorias, NCM e estrutura oficial.
+                      Este app pode manter problemas e acompanhamentos internos
+                      sem sobrescrever o cadastro mestre do ERP.
+                    </p>
                   </div>
-                </>
+                </section>
               )}
 
               {activeTab === "structure" && (
@@ -616,7 +1081,14 @@ export default function ProductManager() {
                           <strong>{item.material_code}</strong>
                           <small>{item.description}</small>
                         </span>
-                        <span>{item.quantity}</span>
+                        <span className="quantity-pill">{item.quantity}</span>
+                        <button
+                          className="ghost-danger-button"
+                          onClick={() => deleteStructureItem(item.id)}
+                          type="button"
+                        >
+                          Excluir
+                        </button>
                       </div>
                     ))}
 
@@ -635,7 +1107,7 @@ export default function ProductManager() {
                       <input
                         name="productCode"
                         onChange={updateIssueField}
-                        placeholder="Ex.: PENN-001"
+                        placeholder={selectedProduct.code}
                         required
                         value={issueForm.productCode}
                       />
@@ -671,6 +1143,67 @@ export default function ProductManager() {
                     {selectedIssues.length === 0 && (
                       <p className="empty-state">
                         Nenhum problema aberto para este produto.
+                      </p>
+                    )}
+                  </div>
+                </section>
+              )}
+
+              {activeTab === "fiscal" && (
+                <section className="tab-panel" aria-label="Dados fiscais">
+                  <dl className="detail-grid fiscal-summary">
+                    <div>
+                      <dt>NCM</dt>
+                      <dd>{selectedProduct.ncm || "Nao informado"}</dd>
+                    </div>
+                    <div>
+                      <dt>Base fiscal</dt>
+                      <dd>{selectedNcmTax ? "Cadastrada" : "Pendente"}</dd>
+                    </div>
+                    <div>
+                      <dt>Atualizacao</dt>
+                      <dd>
+                        {selectedNcmTax?.updated_at
+                          ? new Date(selectedNcmTax.updated_at).toLocaleDateString(
+                              "pt-BR"
+                            )
+                          : "Nao informado"}
+                      </dd>
+                    </div>
+                  </dl>
+
+                  <div className="text-block">
+                    <h3>Impostos por NCM</h3>
+                    {selectedNcmTax ? (
+                      <>
+                        <p>{selectedNcmTax.description}</p>
+                        <dl className="tax-grid">
+                          <div>
+                            <dt>IPI</dt>
+                            <dd>{formatRate(selectedNcmTax.ipi_rate)}</dd>
+                          </div>
+                          <div>
+                            <dt>PIS</dt>
+                            <dd>{formatRate(selectedNcmTax.pis_rate)}</dd>
+                          </div>
+                          <div>
+                            <dt>COFINS</dt>
+                            <dd>{formatRate(selectedNcmTax.cofins_rate)}</dd>
+                          </div>
+                          <div>
+                            <dt>ICMS</dt>
+                            <dd>{formatRate(selectedNcmTax.icms_rate)}</dd>
+                          </div>
+                          <div>
+                            <dt>II</dt>
+                            <dd>{formatRate(selectedNcmTax.import_tax_rate)}</dd>
+                          </div>
+                        </dl>
+                      </>
+                    ) : (
+                      <p>
+                        Nenhuma regra de imposto cadastrada para este NCM no
+                        Supabase.
                       </p>
                     )}
                   </div>
@@ -732,6 +1265,46 @@ export default function ProductManager() {
           </label>
 
           <label>
+            Codigo SAP
+            <input
+              name="sap_material_code"
+              onChange={updateField}
+              placeholder="Ex.: 0000001234"
+              value={form.sap_material_code}
+            />
+          </label>
+
+          <label>
+            Centro SAP
+            <input
+              name="sap_plant"
+              onChange={updateField}
+              placeholder="Ex.: 1000"
+              value={form.sap_plant}
+            />
+          </label>
+
+          <label>
+            Unidade
+            <input
+              name="sap_unit"
+              onChange={updateField}
+              placeholder="Ex.: UN"
+              value={form.sap_unit}
+            />
+          </label>
+
+          <label>
+            Grupo mercadorias
+            <input
+              name="sap_material_group"
+              onChange={updateField}
+              placeholder="Ex.: ELE"
+              value={form.sap_material_group}
+            />
+          </label>
+
+          <label>
             Responsavel
             <input
               name="owner"
@@ -749,6 +1322,19 @@ export default function ProductManager() {
                   {option.label}
                 </option>
               ))}
+            </select>
+          </label>
+
+          <label>
+            Origem
+            <select
+              name="sync_source"
+              onChange={updateField}
+              value={form.sync_source}
+            >
+              <option value="manual">Manual</option>
+              <option value="sap">SAP</option>
+              <option value="importacao">Importacao</option>
             </select>
           </label>
 
