@@ -308,6 +308,135 @@ button {
   margin: 0;
 }
 
+.detail-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.detail-tabs button {
+  min-height: 40px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 700;
+  padding: 0 12px;
+}
+
+.detail-tabs button.active {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.tab-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.compact-form {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.8fr) minmax(180px, 1.4fr) minmax(90px, 0.5fr) auto;
+  gap: 12px;
+  align-items: end;
+  background: var(--panel-soft);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.compact-form.issue-form {
+  grid-template-columns: minmax(150px, 0.8fr) minmax(220px, 1.5fr) auto;
+}
+
+.compact-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.compact-form input {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--text);
+  padding: 10px 11px;
+}
+
+.compact-form button,
+.issue-row button {
+  min-height: 40px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--primary);
+  color: #ffffff;
+  font-weight: 700;
+  padding: 0 14px;
+  white-space: nowrap;
+}
+
+.compact-form button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.data-list {
+  display: grid;
+  gap: 8px;
+}
+
+.data-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 58px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+.data-row strong,
+.data-row small {
+  display: block;
+}
+
+.data-row small {
+  color: var(--muted);
+  line-height: 1.4;
+  margin-top: 4px;
+}
+
+.tax-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0 0;
+}
+
+.tax-grid div {
+  background: var(--panel-soft);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.tax-grid dt {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  margin-bottom: 5px;
+}
+
+.tax-grid dd {
+  margin: 0;
+  font-weight: 700;
+}
+
 .form-panel {
   margin-top: 18px;
 }
@@ -376,6 +505,9 @@ button {
   .summary-grid,
   .product-layout,
   .detail-grid,
+  .tax-grid,
+  .compact-form,
+  .compact-form.issue-form,
   .product-form {
     grid-template-columns: 1fr 1fr;
   }
@@ -386,6 +518,8 @@ button {
 
   .product-list,
   .product-detail,
+  .compact-form button,
+  .compact-form.issue-form button,
   .wide-field {
     grid-column: 1 / -1;
   }
@@ -399,6 +533,9 @@ button {
   .summary-grid,
   .product-layout,
   .detail-grid,
+  .tax-grid,
+  .compact-form,
+  .compact-form.issue-form,
   .product-form {
     grid-template-columns: 1fr;
   }
@@ -415,6 +552,15 @@ button {
   }
 
   .product-row {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-tabs {
+    overflow-x: auto;
+  }
+
+  .data-row,
+  .issue-row {
     grid-template-columns: 1fr;
   }
 
