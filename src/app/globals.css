@@ -163,6 +163,19 @@ button {
   padding: 12px;
 }
 
+.feedback-message,
+.empty-state {
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0;
+  padding: 14px 20px;
+}
+
+.feedback-message {
+  color: #9a3412;
+  border-bottom: 1px solid var(--border);
+}
+
 .product-row {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -352,6 +365,11 @@ button {
 
 .form-actions button:hover {
   background: var(--primary-dark);
+}
+
+.form-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
 }
 
 @media (max-width: 900px) {

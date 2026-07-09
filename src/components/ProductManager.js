@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
 
 const statusOptions = {
   ativo: {
@@ -55,9 +56,43 @@ const emptyForm = {
 };
 
 export default function ProductManager() {
-  const [products, setProducts] = useState(initialProducts);
+  const [products, setProducts] = useState([]);
   const [form, setForm] = useState(emptyForm);
-  const [selectedId, setSelectedId] = useState(initialProducts[0].id);
+  const [selectedId, setSelectedId] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  useEffect(() => {
+    async function loadProducts() {
+      setIsLoading(true);
+      setErrorMessage("");
+
+      const { data, error } = await supabase
+        .from("products")
+        .select(
+          "id, name, code, category, owner, status, characteristics, structure, created_at"
+        )
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        setProducts(initialProducts);
+        setSelectedId(initialProducts[0].id);
+        setErrorMessage(
+          "Nao foi possivel carregar o Supabase. Verifique se a tabela products e as policies foram criadas."
+        );
+        setIsLoading(false);
+        return;
+      }
+
+      const loadedProducts = data ?? [];
+      setProducts(loadedProducts);
+      setSelectedId(loadedProducts[0]?.id ?? null);
+      setIsLoading(false);
+    }
+
+    loadProducts();
+  }, []);
 
   const selectedProduct = useMemo(
     () => products.find((product) => product.id === selectedId) ?? products[0],
@@ -78,12 +113,11 @@ export default function ProductManager() {
     setForm((current) => ({ ...current, [name]: value }));
   }
 
-  function addProduct(event) {
+  async function addProduct(event) {
     event.preventDefault();
 
     const nextProduct = {
       ...form,
-      id: Date.now(),
       name: form.name.trim(),
       code: form.code.trim(),
       category: form.category.trim(),
@@ -96,9 +130,29 @@ export default function ProductManager() {
       return;
     }
 
-    setProducts((current) => [nextProduct, ...current]);
-    setSelectedId(nextProduct.id);
+    setIsSubmitting(true);
+    setErrorMessage("");
+
+    const { data, error } = await supabase
+      .from("products")
+      .insert(nextProduct)
+      .select(
+        "id, name, code, category, owner, status, characteristics, structure, created_at"
+      )
+      .single();
+
+    if (error) {
+      setErrorMessage(
+        `Nao foi possivel cadastrar no Supabase: ${error.message}`
+      );
+      setIsSubmitting(false);
+      return;
+    }
+
+    setProducts((current) => [data, ...current]);
+    setSelectedId(data.id);
     setForm(emptyForm);
+    setIsSubmitting(false);
   }
 
   return (
@@ -128,8 +182,10 @@ export default function ProductManager() {
         <aside className="panel product-list" aria-label="Lista de produtos">
           <div className="panel-heading">
             <h2>Produtos</h2>
-            <span>{products.length} cadastrados</span>
+            <span>{isLoading ? "Carregando" : `${products.length} cadastrados`}</span>
           </div>
+
+          {errorMessage && <p className="feedback-message">{errorMessage}</p>}
 
           <div className="product-list-items">
             {products.map((product) => (
@@ -148,10 +204,14 @@ export default function ProductManager() {
                   </small>
                 </span>
                 <span className={`status-badge ${product.status}`}>
-                  {statusOptions[product.status].label}
+                  {statusOptions[product.status]?.label ?? product.status}
                 </span>
               </button>
             ))}
+
+            {!isLoading && products.length === 0 && (
+              <p className="empty-state">Nenhum produto cadastrado ainda.</p>
+            )}
           </div>
         </aside>
 
@@ -164,7 +224,8 @@ export default function ProductManager() {
                   <h2>{selectedProduct.name}</h2>
                 </div>
                 <span className={`status-badge ${selectedProduct.status}`}>
-                  {statusOptions[selectedProduct.status].label}
+                  {statusOptions[selectedProduct.status]?.label ??
+                    selectedProduct.status}
                 </span>
               </div>
 
@@ -179,7 +240,10 @@ export default function ProductManager() {
                 </div>
                 <div>
                   <dt>Status</dt>
-                  <dd>{statusOptions[selectedProduct.status].description}</dd>
+                  <dd>
+                    {statusOptions[selectedProduct.status]?.description ??
+                      "Status informado no cadastro."}
+                  </dd>
                 </div>
               </dl>
 
@@ -280,7 +344,9 @@ export default function ProductManager() {
           </label>
 
           <div className="form-actions">
-            <button type="submit">Cadastrar produto</button>
+            <button disabled={isSubmitting} type="submit">
+              {isSubmitting ? "Cadastrando..." : "Cadastrar produto"}
+            </button>
           </div>
         </form>
       </section>
