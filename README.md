@@ -17,9 +17,10 @@ apoiar o acompanhamento de:
 - [Next.js](https://nextjs.org/) (React)
 - JavaScript
 - CSS puro (sem bibliotecas de estilo)
+- [Supabase](https://supabase.com/) (banco de dados)
+- [Vercel](https://vercel.com/) (hospedagem)
 
-Nenhum banco de dados ou autenticação está configurado ainda — isso será
-feito em etapas futuras.
+Autenticação ainda não está configurada — isso será feito em etapa futura.
 
 ## Pré-requisitos
 
@@ -44,7 +45,8 @@ npm -v
    ```
    npm install
    ```
-3. (Opcional por enquanto) Copie o arquivo de variáveis de ambiente de exemplo:
+3. Copie o arquivo de variáveis de ambiente de exemplo e preencha com as
+   credenciais do Supabase (Project Settings → API no painel do Supabase):
    ```
    cp .env.example .env.local
    ```
@@ -66,8 +68,20 @@ Para parar o servidor, use `Ctrl + C` no terminal.
 src/
   app/          # Páginas da aplicação (Next.js App Router)
   components/   # Componentes reutilizáveis de interface
+  lib/          # Configuração de serviços externos (ex.: cliente do Supabase)
 docs/           # Documentação do projeto
 ```
+
+## Deploy
+
+O projeto é publicado automaticamente na [Vercel](https://vercel.com/) a
+partir da branch `main`. Cada Pull Request também gera uma URL de preview
+própria.
+
+As variáveis de ambiente (`NEXT_PUBLIC_SUPABASE_URL` e
+`NEXT_PUBLIC_SUPABASE_ANON_KEY`) precisam estar cadastradas em
+**Project Settings → Environment Variables** no painel da Vercel, com os
+mesmos valores do `.env.local`.
 
 ## Como contribuir
 
