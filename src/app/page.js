@@ -36,6 +36,10 @@ export default function Home() {
           <Card key={card.title} title={card.title} description={card.description} />
         ))}
       </section>
+
+      <p>
+        <a href="/exemplo">Ver exemplo de integração com Supabase →</a>
+      </p>
     </main>
   );
 }
