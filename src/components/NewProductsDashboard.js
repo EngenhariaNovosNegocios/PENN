@@ -27,21 +27,28 @@ export default function NewProductsDashboard({ onOpenProducts }) {
   const [products, setProducts] = useState([]);
   const [projects, setProjects] = useState([]);
   const [tasks, setTasks] = useState([]);
+  const [taskAttachments, setTaskAttachments] = useState([]);
+  const [launchHistory, setLaunchHistory] = useState([]);
   const [selectedProjectId, setSelectedProjectId] = useState(null);
   const [expandedStage, setExpandedStage] = useState("discovery");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyProject);
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
+  const [expandedTaskId, setExpandedTaskId] = useState(null);
+  const [taskNotes, setTaskNotes] = useState({});
 
   async function loadWorkflow() {
-    const [productsResult, projectsResult, tasksResult] = await Promise.all([
+    const [productsResult, projectsResult, tasksResult, attachmentsResult, historyResult] = await Promise.all([
       supabase.from("products").select("id, code, name, category, owner").order("code"),
       supabase.from("product_development_projects").select("*").order("created_at", { ascending: false }),
       supabase.from("product_development_tasks").select("*").order("sort_order"),
+      supabase.from("product_development_task_attachments").select("*").order("created_at"),
+      supabase.from("product_launch_date_history").select("*").order("changed_at", { ascending: false }),
     ]);
     if (projectsResult.error || tasksResult.error) { setMessage(`Execute o SQL do fluxo de desenvolvimento: ${projectsResult.error?.message ?? tasksResult.error?.message}`); }
     setProducts(productsResult.data ?? []); setProjects(projectsResult.data ?? []); setTasks(tasksResult.data ?? []);
+    setTaskAttachments(attachmentsResult.data ?? []); setLaunchHistory(historyResult.data ?? []);
   }
 
   useEffect(() => { loadWorkflow(); }, []);
@@ -77,11 +84,30 @@ export default function NewProductsDashboard({ onOpenProducts }) {
     setTasks((current) => current.map((item) => item.id === task.id ? { ...item, status, completed_at: completedAt } : item));
   }
 
+  async function saveTaskNote(task) {
+    const notes = taskNotes[task.id] ?? task.notes ?? "";
+    const { error } = await supabase.from("product_development_tasks").update({ notes }).eq("id", task.id);
+    if (!error) { setTasks((current)=>current.map((item)=>item.id===task.id?{...item,notes}:item)); setMessage("Observação salva."); }
+  }
+
+  async function uploadTaskAttachment(task, file) {
+    if (!file) return; const path=`development/${task.project_id}/${task.id}/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g,"-")}`;
+    const { error: uploadError }=await supabase.storage.from("product-files").upload(path,file,{contentType:file.type}); if(uploadError){setMessage(uploadError.message);return;}
+    const { data:urlData }=supabase.storage.from("product-files").getPublicUrl(path); const {data,error}=await supabase.from("product_development_task_attachments").insert({task_id:task.id,name:file.name,storage_path:path,public_url:urlData.publicUrl}).select("*").single(); if(!error)setTaskAttachments((current)=>[...current,data]);
+  }
+
+  async function changeLaunchDate(value) {
+    const oldDate=selectedProject.target_launch_date; if(value===oldDate)return; const reason=window.prompt("Motivo da alteração da data prevista:"); if(!reason?.trim())return;
+    const {error}=await supabase.from("product_development_projects").update({target_launch_date:value||null,updated_at:new Date().toISOString()}).eq("id",selectedProject.id); if(error){setMessage(error.message);return;}
+    const {data}=await supabase.from("product_launch_date_history").insert({project_id:selectedProject.id,old_date:oldDate||null,new_date:value||null,reason:reason.trim()}).select("*").single(); setProjects((current)=>current.map((p)=>p.id===selectedProject.id?{...p,target_launch_date:value||null}:p)); if(data)setLaunchHistory((current)=>[data,...current]);
+  }
+
   if (selectedProject) return (
     <main className="flow-page"><button className="flow-back" onClick={() => setSelectedProjectId(null)}><FlowIcon name="back"/> Voltar aos projetos</button>
       <section className="flow-detail-hero"><div><span>{selectedProject.product?.code}</span><h1>{selectedProject.product?.name}</h1><p>{selectedProject.development_reason || "Fluxo estruturado de desenvolvimento e lançamento."}</p></div><div className="flow-detail-score"><strong>{selectedProject.progress}%</strong><span>concluído</span></div></section>
-      <section className="flow-project-info"><div><span>Solicitante</span><strong>{selectedProject.requester || "Não definido"}</strong></div><div><span>Responsável</span><strong>{selectedProject.owner || "Não definido"}</strong></div><div><span>Lançamento previsto</span><strong>{selectedProject.target_launch_date ? new Date(`${selectedProject.target_launch_date}T12:00:00`).toLocaleDateString("pt-BR") : "Não definido"}</strong></div><div><span>Preço objetivo</span><strong>{selectedProject.target_price ? Number(selectedProject.target_price).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "Não definido"}</strong></div></section>
-      <section className="flow-stage-list">{workflowStages.map((stage) => { const stageTasks = selectedProject.projectTasks.filter((task) => task.stage_key === stage.key); const done = stageTasks.filter((task) => ["completed","not_applicable"].includes(task.status)).length; const open = expandedStage === stage.key; return <article className={`flow-stage ${open ? "open" : ""}`} key={stage.key}><button className="flow-stage-header" onClick={() => setExpandedStage(open ? "" : stage.key)}><span className={`flow-stage-number ${stage.color}`}>{stage.number}</span><div><strong>{stage.title}</strong><small>{stage.area}</small></div><div className="flow-stage-progress"><span>{done}/{stageTasks.length}</span><i><b style={{ width: `${stageTasks.length ? done/stageTasks.length*100 : 0}%` }}/></i></div><FlowIcon name="chevron"/></button>{open && <div className="flow-task-list">{stageTasks.map((task) => <div className={`flow-task ${task.status}`} key={task.id}><button className="flow-task-check" onClick={() => updateTask(task, task.status === "completed" ? "pending" : "completed")}>{task.status === "completed" && <FlowIcon name="check"/>}</button><span>{task.title}</span><select aria-label={`Status de ${task.title}`} value={task.status} onChange={(event) => updateTask(task, event.target.value)}><option value="pending">Pendente</option><option value="in_progress">Em andamento</option><option value="blocked">Bloqueado</option><option value="completed">Concluído</option><option value="not_applicable">Não aplicável</option></select></div>)}</div>}</article>; })}</section>
+      <section className="flow-project-info"><div><span>Solicitante</span><strong>{selectedProject.requester || "Não definido"}</strong></div><div><span>Responsável</span><strong>{selectedProject.owner || "Não definido"}</strong></div><div className="launch-date-editor"><span>Lançamento previsto</span><input type="date" value={selectedProject.target_launch_date || ""} onChange={(event)=>changeLaunchDate(event.target.value)} /><small>{launchHistory.filter((item)=>item.project_id===selectedProject.id).length} alterações registradas</small></div><div><span>Preço objetivo</span><strong>{selectedProject.target_price ? Number(selectedProject.target_price).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "Não definido"}</strong></div></section>
+      {launchHistory.some((item)=>item.project_id===selectedProject.id)&&<details className="launch-history"><summary>Histórico da previsão de lançamento</summary>{launchHistory.filter((item)=>item.project_id===selectedProject.id).map((item)=><div key={item.id}><strong>{item.old_date||"Sem data"} → {item.new_date||"Sem data"}</strong><span>{item.reason}</span><small>{new Date(item.changed_at).toLocaleString("pt-BR")}</small></div>)}</details>}
+      <section className="flow-stage-list">{workflowStages.map((stage) => { const stageTasks=selectedProject.projectTasks.filter((task)=>task.stage_key===stage.key);const done=stageTasks.filter((task)=>["completed","not_applicable"].includes(task.status)).length;const open=expandedStage===stage.key;return <article className={`flow-stage ${open?"open":""}`} key={stage.key}><button className="flow-stage-header" onClick={()=>setExpandedStage(open?"":stage.key)}><span className={`flow-stage-number ${stage.color}`}>{stage.number}</span><div><strong>{stage.title}</strong><small>{stage.area}</small></div><div className="flow-stage-progress"><span>{done}/{stageTasks.length}</span><i><b style={{width:`${stageTasks.length?done/stageTasks.length*100:0}%`}}/></i></div><FlowIcon name="chevron"/></button>{open&&<div className="flow-task-list">{stageTasks.map((task)=><div className={`flow-task-wrap ${task.status}`} key={task.id}><div className="flow-task"><button className="flow-task-check" onClick={()=>updateTask(task,task.status==="completed"?"pending":"completed")}>{task.status==="completed"&&<FlowIcon name="check"/>}</button><span>{task.title}</span><button className="task-detail-trigger" onClick={()=>setExpandedTaskId(expandedTaskId===task.id?null:task.id)}>Observações e anexos</button><select aria-label={`Status de ${task.title}`} value={task.status} onChange={(event)=>updateTask(task,event.target.value)}><option value="pending">Pendente</option><option value="in_progress">Em andamento</option><option value="blocked">Bloqueado</option><option value="completed">Concluído</option><option value="not_applicable">Não aplicável</option></select></div>{expandedTaskId===task.id&&<div className="task-evidence"><label>Observações<textarea rows="3" value={taskNotes[task.id]??task.notes??""} onChange={(event)=>setTaskNotes((current)=>({...current,[task.id]:event.target.value}))}/></label><button onClick={()=>saveTaskNote(task)}>Salvar observação</button><label>Anexar evidência<input type="file" onChange={(event)=>uploadTaskAttachment(task,event.target.files?.[0])}/></label><div>{taskAttachments.filter((item)=>item.task_id===task.id).map((item)=><a href={item.public_url} key={item.id} rel="noreferrer" target="_blank">{item.name}</a>)}</div></div>}</div>)}</div>}</article>;})}</section>
     </main>
   );
 

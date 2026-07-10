@@ -146,6 +146,34 @@ create table if not exists public.raw_materials (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.product_categories (
+  id bigint primary key generated always as identity,
+  name text not null unique,
+  created_at timestamptz not null default now()
+);
+
+insert into public.product_categories (name)
+select distinct category from public.products where category is not null and trim(category) <> ''
+on conflict (name) do nothing;
+
+create table if not exists public.product_development_task_attachments (
+  id bigint primary key generated always as identity,
+  task_id bigint not null references public.product_development_tasks(id) on delete cascade,
+  name text not null,
+  storage_path text not null unique,
+  public_url text not null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.product_launch_date_history (
+  id bigint primary key generated always as identity,
+  project_id bigint not null references public.product_development_projects(id) on delete cascade,
+  old_date date,
+  new_date date,
+  reason text not null,
+  changed_at timestamptz not null default now()
+);
+
 alter table public.product_budget_items drop constraint if exists product_budget_items_quantity_check;
 alter table public.product_budget_items add constraint product_budget_items_quantity_check check (quantity > 0);
 alter table public.product_budget_items drop constraint if exists product_budget_items_unit_type_check;
@@ -165,6 +193,9 @@ alter table public.product_development_projects enable row level security;
 alter table public.product_development_tasks enable row level security;
 alter table public.product_budget_items enable row level security;
 alter table public.raw_materials enable row level security;
+alter table public.product_categories enable row level security;
+alter table public.product_development_task_attachments enable row level security;
+alter table public.product_launch_date_history enable row level security;
 
 grant select, insert, delete on public.product_structure_items to anon;
 grant select, insert, update, delete on public.product_issues to anon;
@@ -175,6 +206,9 @@ grant select, insert, update, delete on public.product_development_projects to a
 grant select, insert, update, delete on public.product_development_tasks to anon;
 grant select, insert, update, delete on public.product_budget_items to anon;
 grant select, insert, update, delete on public.raw_materials to anon;
+grant select, insert, update, delete on public.product_categories to anon;
+grant select, insert, delete on public.product_development_task_attachments to anon;
+grant select, insert on public.product_launch_date_history to anon;
 
 drop policy if exists "ncm_taxes_select" on public.ncm_taxes;
 drop policy if exists "product_structure_items_select" on public.product_structure_items;
@@ -196,6 +230,9 @@ drop policy if exists "development_projects_all" on public.product_development_p
 drop policy if exists "development_tasks_all" on public.product_development_tasks;
 drop policy if exists "product_budget_items_all" on public.product_budget_items;
 drop policy if exists "raw_materials_all" on public.raw_materials;
+drop policy if exists "product_categories_all" on public.product_categories;
+drop policy if exists "development_task_attachments_all" on public.product_development_task_attachments;
+drop policy if exists "launch_date_history_all" on public.product_launch_date_history;
 
 create policy "ncm_taxes_select"
 on public.ncm_taxes
@@ -295,3 +332,7 @@ using (true) with check (true);
 create policy "raw_materials_all"
 on public.raw_materials for all to anon
 using (true) with check (true);
+
+create policy "product_categories_all" on public.product_categories for all to anon using (true) with check (true);
+create policy "development_task_attachments_all" on public.product_development_task_attachments for all to anon using (true) with check (true);
+create policy "launch_date_history_all" on public.product_launch_date_history for all to anon using (true) with check (true);

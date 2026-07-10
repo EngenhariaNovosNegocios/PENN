@@ -68,9 +68,9 @@ export default function OverviewDashboard({ onOpenProducts, onOpenIssues }) {
       </section>
 
       <section className="overview-metrics" aria-label="Métricas principais">
-        <article className="metric-card blue"><span className="metric-icon"><MetricIcon type="products" /></span><div><small>Produtos cadastrados</small><strong>{loading ? "—" : data.products.length}</strong><span>{metrics.statuses.ativo ?? 0} em operação</span></div></article>
+        <article className="metric-card blue actionable"><span className="metric-icon"><MetricIcon type="products" /></span><div><small>Produtos cadastrados</small><strong>{loading ? "—" : data.products.length}</strong><span>{metrics.statuses.ativo ?? 0} em operação</span></div><button onClick={onOpenProducts} aria-label="Abrir produtos"><MetricIcon type="arrow" /></button></article>
         <article className="metric-card red actionable"><span className="metric-icon"><MetricIcon type="issues" /></span><div><small>Pendências abertas</small><strong>{loading ? "—" : data.issues.length}</strong><span>{metrics.affected} produtos impactados</span></div><button onClick={onOpenIssues} aria-label="Abrir todas as pendências"><MetricIcon type="arrow" /></button></article>
-        <article className="metric-card violet"><span className="metric-icon"><MetricIcon type="docs" /></span><div><small>Base documental</small><strong>{loading ? "—" : metrics.documents}</strong><span>{metrics.photos} fotos armazenadas</span></div></article>
+        <article className="metric-card violet"><span className="metric-icon"><MetricIcon type="docs" /></span><div><small>Base documental</small><strong>{loading ? "—" : data.attachments.length}</strong><span>{metrics.documents} documentos · {metrics.photos} fotos</span></div></article>
         <article className="metric-card green"><span className="metric-icon"><MetricIcon type="structure" /></span><div><small>Itens de estrutura</small><strong>{loading ? "—" : data.structure.length}</strong><span>componentes mapeados</span></div></article>
       </section>
 

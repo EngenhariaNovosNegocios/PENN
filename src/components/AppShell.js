@@ -4,8 +4,6 @@ import { useState } from "react";
 import OverviewDashboard from "@/components/OverviewDashboard";
 import NewProductsDashboard from "@/components/NewProductsDashboard";
 import IssuesDashboard from "@/components/IssuesDashboard";
-import IndicatorsDashboard from "@/components/IndicatorsDashboard";
-import ReportsDashboard from "@/components/ReportsDashboard";
 
 const Icon = ({ name }) => {
   const paths = {
@@ -27,8 +25,8 @@ const navigation = [
   { id: "products", label: "Produtos", icon: "box" },
   { id: "new-products", label: "Novos produtos", icon: "spark" },
   { id: "issues", label: "Pendências", icon: "alert" },
-  { id: "indicators", label: "Indicadores", icon: "chart" },
-  { id: "reports", label: "Relatórios", icon: "file" },
+  { label: "Indicadores", icon: "chart", disabled: true },
+  { label: "Relatórios", icon: "file", disabled: true },
 ];
 
 export default function AppShell({ children }) {
@@ -50,8 +48,6 @@ export default function AppShell({ children }) {
           <section className="app-page" hidden={activePage !== "products"}>{children}</section>
           <section className="app-page" hidden={activePage !== "new-products"}><NewProductsDashboard onOpenProducts={() => setActivePage("products")} /></section>
           <section className="app-page" hidden={activePage !== "issues"}><IssuesDashboard onOpenProduct={(productId) => { setActivePage("products"); window.setTimeout(() => window.dispatchEvent(new CustomEvent("penn:open-product", { detail: { productId } })), 0); }} /></section>
-          <section className="app-page" hidden={activePage !== "indicators"}><IndicatorsDashboard /></section>
-          <section className="app-page" hidden={activePage !== "reports"}><ReportsDashboard /></section>
         </div>
       </section>
     </div>

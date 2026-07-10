@@ -143,6 +143,7 @@ export default function ProductManager() {
   const [attachments, setAttachments] = useState([]);
   const [budgetItems, setBudgetItems] = useState([]);
   const [rawMaterials, setRawMaterials] = useState([]);
+  const [productCategories, setProductCategories] = useState([]);
   const [ncmTaxes, setNcmTaxes] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [editForm, setEditForm] = useState(emptyForm);
@@ -193,6 +194,7 @@ export default function ProductManager() {
         loadProductDetails(loadedProducts.map((product) => product.id)),
         loadNcmTaxes(),
         loadRawMaterials(),
+        loadProductCategories(),
       ]);
       const productsWithIssueStatus = loadedProducts.map((product) =>
         details.issues.some((issue) => issue.product_id === product.id)
@@ -301,6 +303,20 @@ export default function ProductManager() {
   async function loadRawMaterials() {
     const { data } = await supabase.from("raw_materials").select("id, code, name, unit_type, is_provisional, created_at").order("code");
     setRawMaterials(data ?? []);
+  }
+
+  async function loadProductCategories() {
+    const { data } = await supabase.from("product_categories").select("id, name").order("name");
+    setProductCategories(data ?? []);
+  }
+
+  async function selectCategory(value, setter) {
+    if (value !== "__new__") { setter((current) => ({ ...current, category: value })); return; }
+    const name = window.prompt("Nome da nova categoria:")?.trim();
+    if (!name) return;
+    const { data, error } = await supabase.from("product_categories").insert({ name }).select("id, name").single();
+    if (error) { setErrorMessage(`Nao foi possível criar a categoria: ${error.message}`); return; }
+    setProductCategories((current) => [...current, data].sort((a,b) => a.name.localeCompare(b.name))); setter((current) => ({ ...current, category: data.name }));
   }
 
   const selectedStructureItems = useMemo(
@@ -1029,11 +1045,7 @@ export default function ProductManager() {
 
                     <label>
                       Categoria
-                      <input
-                        name="category"
-                        onChange={updateEditField}
-                        value={editForm.category}
-                      />
+                      <select value={editForm.category} onChange={(event) => selectCategory(event.target.value, setEditForm)}><option value="">Selecione</option>{productCategories.map((category)=><option key={category.id} value={category.name}>{category.name}</option>)}<option value="__new__">+ Adicionar categoria</option></select>
                     </label>
 
                     <label>
@@ -1366,12 +1378,7 @@ export default function ProductManager() {
 
           <label>
             Categoria
-            <input
-              name="category"
-              onChange={updateField}
-              placeholder="Ex.: Produto tecnico"
-              value={form.category}
-            />
+            <select value={form.category} onChange={(event) => selectCategory(event.target.value, setForm)}><option value="">Selecione</option>{productCategories.map((category)=><option key={category.id} value={category.name}>{category.name}</option>)}<option value="__new__">+ Adicionar categoria</option></select>
           </label>
 
           <label>
