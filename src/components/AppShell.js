@@ -35,7 +35,6 @@ export default function AppShell({ children }) {
       {menuOpen && <button className="sidebar-backdrop" onClick={() => setMenuOpen(false)} aria-label="Fechar menu"/>}
       <section className="app-stage">
         <header className="topbar"><button className="menu-trigger desktop" onClick={() => setCollapsed(!collapsed)} aria-label={collapsed ? "Expandir menu" : "Recolher menu"}><Icon name="menu"/></button><button className="menu-trigger mobile" onClick={() => setMenuOpen(true)} aria-label="Abrir menu"><Icon name="menu"/></button><div className="breadcrumb"><span>Portal PENN</span><b>/</b><strong>Produtos</strong></div><div className="topbar-actions"><span className="environment"><i/> Ambiente interno</span><button className="notification" aria-label="Notificações">●</button></div></header>
-        <div className="main-tab"><span>Produtos</span></div>
         <div className="main-content">{children}</div>
       </section>
     </div>

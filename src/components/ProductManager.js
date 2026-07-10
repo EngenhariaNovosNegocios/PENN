@@ -127,6 +127,7 @@ export default function ProductManager() {
   const [issueForm, setIssueForm] = useState(emptyIssueForm);
   const [selectedId, setSelectedId] = useState(null);
   const [activeTab, setActiveTab] = useState("overview");
+  const [viewMode, setViewMode] = useState("catalog");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("todos");
   const [isLoading, setIsLoading] = useState(true);
@@ -401,6 +402,7 @@ export default function ProductManager() {
     setProducts((current) => [data, ...current]);
     setSelectedId(data.id);
     setActiveTab("overview");
+    setViewMode("catalog");
     setForm(emptyForm);
     setIsSubmitting(false);
     showSuccess("Produto cadastrado.");
@@ -671,6 +673,40 @@ export default function ProductManager() {
         </div>
       </header>
 
+      <nav className="workspace-tabs" aria-label="Áreas de produtos">
+        <button
+          className={viewMode === "catalog" ? "active" : ""}
+          onClick={() => setViewMode("catalog")}
+          type="button"
+        >
+          <span className="workspace-tab-icon">▦</span>
+          <span>
+            <strong>Catálogo</strong>
+            <small>Consultar e gerenciar produtos</small>
+          </span>
+        </button>
+        <button
+          className={viewMode === "create" ? "active" : ""}
+          onClick={() => setViewMode("create")}
+          type="button"
+        >
+          <span className="workspace-tab-icon">＋</span>
+          <span>
+            <strong>Adicionar produto</strong>
+            <small>Criar um novo cadastro</small>
+          </span>
+        </button>
+      </nav>
+
+      {(errorMessage || successMessage) && (
+        <section className="message-stack" aria-live="polite">
+          {errorMessage && <p className="feedback-message">{errorMessage}</p>}
+          {successMessage && <p className="success-message">{successMessage}</p>}
+        </section>
+      )}
+
+      {viewMode === "catalog" && (
+        <>
       <section className="summary-grid" aria-label="Resumo operacional">
         {Object.entries(statusOptions).map(([status, option]) => (
           <button
@@ -694,13 +730,6 @@ export default function ProductManager() {
           <span>Problemas abertos</span>
         </div>
       </section>
-
-      {(errorMessage || successMessage) && (
-        <section className="message-stack" aria-live="polite">
-          {errorMessage && <p className="feedback-message">{errorMessage}</p>}
-          {successMessage && <p className="success-message">{successMessage}</p>}
-        </section>
-      )}
 
       <section className="product-layout">
         <aside className="panel product-list" aria-label="Lista de produtos">
@@ -1213,11 +1242,17 @@ export default function ProductManager() {
           )}
         </section>
       </section>
+        </>
+      )}
 
+      {viewMode === "create" && (
       <section className="panel form-panel">
         <div className="panel-heading">
-          <h2>Novo produto</h2>
-          <span>Entrada rapida</span>
+          <div>
+            <span className="form-step">Novo cadastro</span>
+            <h2>Informações do produto</h2>
+          </div>
+          <span>Campos com * são obrigatórios</span>
         </div>
 
         <form className="product-form" onSubmit={addProduct}>
@@ -1356,6 +1391,7 @@ export default function ProductManager() {
           </div>
         </form>
       </section>
+      )}
     </main>
   );
 }
