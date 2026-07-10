@@ -60,6 +60,10 @@ npm run dev
 Depois abra [http://localhost:3000](http://localhost:3000) no navegador. A
 página inicial "Central de Novos Negócios" deve aparecer.
 
+Em [http://localhost:3000/exemplo](http://localhost:3000/exemplo) há uma
+página de referência que busca dados reais da tabela `avisos` no Supabase,
+mostrando como ler dados do banco neste projeto.
+
 Para parar o servidor, use `Ctrl + C` no terminal.
 
 ## Estrutura de pastas
