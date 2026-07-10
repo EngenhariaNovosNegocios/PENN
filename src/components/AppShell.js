@@ -43,7 +43,12 @@ export default function AppShell({ children }) {
       {menuOpen && <button className="sidebar-backdrop" onClick={() => setMenuOpen(false)} aria-label="Fechar menu"/>}
       <section className="app-stage">
         <header className="topbar"><button className="menu-trigger desktop" onClick={() => setCollapsed(!collapsed)} aria-label={collapsed ? "Expandir menu" : "Recolher menu"}><Icon name="menu"/></button><button className="menu-trigger mobile" onClick={() => setMenuOpen(true)} aria-label="Abrir menu"><Icon name="menu"/></button><div className="breadcrumb"><span>Portal PENN</span><b>/</b><strong>{{ overview: "Visão geral", products: "Produtos", "new-products": "Novos produtos", issues: "Problemas" }[activePage]}</strong></div><div className="topbar-actions"><span className="environment"><i/> Ambiente interno</span><button className="notification" aria-label="Notificações">●</button></div></header>
-        <div className="main-content">{activePage === "overview" ? <OverviewDashboard onOpenProducts={() => setActivePage("products")} onOpenIssues={() => setActivePage("issues")} /> : activePage === "new-products" ? <NewProductsDashboard onOpenProducts={() => setActivePage("products")} /> : activePage === "issues" ? <IssuesDashboard /> : children}</div>
+        <div className="main-content">
+          <section className="app-page" hidden={activePage !== "overview"}><OverviewDashboard onOpenProducts={() => setActivePage("products")} onOpenIssues={() => setActivePage("issues")} /></section>
+          <section className="app-page" hidden={activePage !== "products"}>{children}</section>
+          <section className="app-page" hidden={activePage !== "new-products"}><NewProductsDashboard onOpenProducts={() => setActivePage("products")} /></section>
+          <section className="app-page" hidden={activePage !== "issues"}><IssuesDashboard /></section>
+        </div>
       </section>
     </div>
   );

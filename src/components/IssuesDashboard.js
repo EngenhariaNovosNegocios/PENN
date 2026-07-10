@@ -27,6 +27,7 @@ export default function IssuesDashboard() {
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
+  const [loadingError, setLoadingError] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("todos");
 
   async function loadData() {
@@ -34,6 +35,15 @@ export default function IssuesDashboard() {
       supabase.from("products").select("id, code, name, status").order("code"),
       supabase.from("product_issues").select("id, product_id, product_code, description, priority, due_date, created_at").is("resolved_at", null).order("created_at", { ascending: false }),
     ]);
+    if (productsResult.error || issuesResult.error) {
+      setLoadingError(
+        `Não foi possível carregar os problemas: ${
+          issuesResult.error?.message ?? productsResult.error?.message
+        }`
+      );
+      return;
+    }
+    setLoadingError("");
     setProducts(productsResult.data ?? []);
     setIssues(issuesResult.data ?? []);
   }
@@ -75,6 +85,7 @@ export default function IssuesDashboard() {
       </section>
 
       <section className="issues-board">
+        {loadingError && <div className="issues-load-error"><span>{loadingError}</span><button onClick={loadData}>Tentar novamente</button></div>}
         <header><div><span className="panel-kicker">Visão por produto</span><h2>Problemas abertos</h2></div><div className="priority-filters"><button className={priorityFilter === "todos" ? "active" : ""} onClick={() => setPriorityFilter("todos")}>Todos</button>{Object.entries(priorityMeta).map(([value, meta]) => <button className={priorityFilter === value ? "active" : ""} key={value} onClick={() => setPriorityFilter(value)}>{meta.label}</button>)}</div></header>
         <div className="issue-groups">{groups.map(({ product, issues: productIssues }) => <article className="issue-product-group" key={product.id}><header><span className="issue-product-symbol"><IssueIcon name="box"/></span><div><strong>{product.code}</strong><h3>{product.name}</h3></div><span>{productIssues.length} {productIssues.length === 1 ? "problema" : "problemas"}</span></header><div>{productIssues.map((issue, index) => { const isOverdue = issue.due_date && new Date(`${issue.due_date}T23:59:59`) < new Date(); return <div className="global-issue-row" key={issue.id}><span className="issue-order">{String(index + 1).padStart(2,"0")}</span><div><strong>{issue.description}</strong><span><i className={`priority-dot ${priorityMeta[issue.priority]?.className || "medium"}`}/>{priorityMeta[issue.priority]?.label || "Média"}</span></div><span className={isOverdue ? "issue-deadline overdue" : "issue-deadline"}><IssueIcon name="calendar"/>{issue.due_date ? new Date(`${issue.due_date}T12:00:00`).toLocaleDateString("pt-BR") : "Sem prazo"}</span></div>})}</div></article>)}{groups.length === 0 && <div className="issues-empty"><IssueIcon name="alert"/><strong>Nenhum problema encontrado</strong><span>Não há ocorrências abertas com este filtro.</span></div>}</div>
       </section>
