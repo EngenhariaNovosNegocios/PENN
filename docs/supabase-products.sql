@@ -64,8 +64,11 @@ drop constraint if exists product_issues_resolution_check;
 alter table public.product_issues
 add constraint product_issues_resolution_check check (
   resolved_at is null
-  or length(trim(coalesce(resolution_note, ''))) >= 5
+  or length(trim(coalesce(resolution_note, ''))) >= 10
 );
+
+alter table public.product_issues drop constraint if exists product_issues_description_check;
+alter table public.product_issues add constraint product_issues_description_check check (length(trim(description)) >= 10) not valid;
 
 create table if not exists public.product_attachments (
   id bigint primary key generated always as identity,
@@ -119,12 +122,29 @@ create table if not exists public.product_budget_items (
   quantity numeric not null default 1 check (quantity > 0),
   unit_type text not null default 'UN' check (unit_type in ('UN', 'PC', 'KIT', 'CX', 'KG', 'M', 'L', 'H')),
   mkp numeric not null default 1 check (mkp > 0),
+  approved boolean not null default false,
+  structure_item_id bigint references public.product_structure_items(id) on delete set null,
+  provisional_code text,
+  final_code text,
   created_at timestamptz not null default now()
 );
 
 alter table public.product_budget_items add column if not exists quantity numeric not null default 1;
 alter table public.product_budget_items add column if not exists unit_type text not null default 'UN';
 alter table public.product_budget_items add column if not exists mkp numeric not null default 1;
+alter table public.product_budget_items add column if not exists approved boolean not null default false;
+alter table public.product_budget_items add column if not exists structure_item_id bigint references public.product_structure_items(id) on delete set null;
+alter table public.product_budget_items add column if not exists provisional_code text;
+alter table public.product_budget_items add column if not exists final_code text;
+
+create table if not exists public.raw_materials (
+  id bigint primary key generated always as identity,
+  code text not null unique,
+  name text not null,
+  unit_type text not null default 'UN',
+  is_provisional boolean not null default false,
+  created_at timestamptz not null default now()
+);
 
 alter table public.product_budget_items drop constraint if exists product_budget_items_quantity_check;
 alter table public.product_budget_items add constraint product_budget_items_quantity_check check (quantity > 0);
@@ -144,6 +164,7 @@ alter table public.product_attachments enable row level security;
 alter table public.product_development_projects enable row level security;
 alter table public.product_development_tasks enable row level security;
 alter table public.product_budget_items enable row level security;
+alter table public.raw_materials enable row level security;
 
 grant select, insert, delete on public.product_structure_items to anon;
 grant select, insert, update, delete on public.product_issues to anon;
@@ -153,6 +174,7 @@ grant select, insert, delete on public.product_attachments to anon;
 grant select, insert, update, delete on public.product_development_projects to anon;
 grant select, insert, update, delete on public.product_development_tasks to anon;
 grant select, insert, update, delete on public.product_budget_items to anon;
+grant select, insert, update, delete on public.raw_materials to anon;
 
 drop policy if exists "ncm_taxes_select" on public.ncm_taxes;
 drop policy if exists "product_structure_items_select" on public.product_structure_items;
@@ -173,6 +195,7 @@ drop policy if exists "product_files_delete" on storage.objects;
 drop policy if exists "development_projects_all" on public.product_development_projects;
 drop policy if exists "development_tasks_all" on public.product_development_tasks;
 drop policy if exists "product_budget_items_all" on public.product_budget_items;
+drop policy if exists "raw_materials_all" on public.raw_materials;
 
 create policy "ncm_taxes_select"
 on public.ncm_taxes
@@ -267,4 +290,8 @@ using (true) with check (true);
 
 create policy "product_budget_items_all"
 on public.product_budget_items for all to anon
+using (true) with check (true);
+
+create policy "raw_materials_all"
+on public.raw_materials for all to anon
 using (true) with check (true);

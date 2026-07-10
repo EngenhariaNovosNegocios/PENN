@@ -4,6 +4,8 @@ import { useState } from "react";
 import OverviewDashboard from "@/components/OverviewDashboard";
 import NewProductsDashboard from "@/components/NewProductsDashboard";
 import IssuesDashboard from "@/components/IssuesDashboard";
+import IndicatorsDashboard from "@/components/IndicatorsDashboard";
+import ReportsDashboard from "@/components/ReportsDashboard";
 
 const Icon = ({ name }) => {
   const paths = {
@@ -24,9 +26,9 @@ const navigation = [
   { id: "overview", label: "Visão geral", icon: "grid" },
   { id: "products", label: "Produtos", icon: "box" },
   { id: "new-products", label: "Novos produtos", icon: "spark" },
-  { id: "issues", label: "Problemas", icon: "alert" },
-  { label: "Indicadores", icon: "chart", disabled: true },
-  { label: "Relatórios", icon: "file", disabled: true },
+  { id: "issues", label: "Pendências", icon: "alert" },
+  { id: "indicators", label: "Indicadores", icon: "chart" },
+  { id: "reports", label: "Relatórios", icon: "file" },
 ];
 
 export default function AppShell({ children }) {
@@ -42,12 +44,14 @@ export default function AppShell({ children }) {
       </aside>
       {menuOpen && <button className="sidebar-backdrop" onClick={() => setMenuOpen(false)} aria-label="Fechar menu"/>}
       <section className="app-stage">
-        <header className="topbar"><button className="menu-trigger desktop" onClick={() => setCollapsed(!collapsed)} aria-label={collapsed ? "Expandir menu" : "Recolher menu"}><Icon name="menu"/></button><button className="menu-trigger mobile" onClick={() => setMenuOpen(true)} aria-label="Abrir menu"><Icon name="menu"/></button><div className="breadcrumb"><span>Portal PENN</span><b>/</b><strong>{{ overview: "Visão geral", products: "Produtos", "new-products": "Novos produtos", issues: "Problemas" }[activePage]}</strong></div><div className="topbar-actions"><span className="environment"><i/> Ambiente interno</span><button className="notification" aria-label="Notificações">●</button></div></header>
+        <header className="topbar"><button className="menu-trigger desktop" onClick={() => setCollapsed(!collapsed)} aria-label={collapsed ? "Expandir menu" : "Recolher menu"}><Icon name="menu"/></button><button className="menu-trigger mobile" onClick={() => setMenuOpen(true)} aria-label="Abrir menu"><Icon name="menu"/></button><div className="breadcrumb"><span>Portal PENN</span><b>/</b><strong>{{ overview: "Visão geral", products: "Produtos", "new-products": "Novos produtos", issues: "Pendências", indicators: "Indicadores", reports: "Relatórios" }[activePage]}</strong></div><div className="topbar-actions"><span className="environment"><i/> Ambiente interno</span><button className="notification" aria-label="Notificações">●</button></div></header>
         <div className="main-content">
           <section className="app-page" hidden={activePage !== "overview"}><OverviewDashboard onOpenProducts={() => setActivePage("products")} onOpenIssues={() => setActivePage("issues")} /></section>
           <section className="app-page" hidden={activePage !== "products"}>{children}</section>
           <section className="app-page" hidden={activePage !== "new-products"}><NewProductsDashboard onOpenProducts={() => setActivePage("products")} /></section>
-          <section className="app-page" hidden={activePage !== "issues"}><IssuesDashboard /></section>
+          <section className="app-page" hidden={activePage !== "issues"}><IssuesDashboard onOpenProduct={(productId) => { setActivePage("products"); window.setTimeout(() => window.dispatchEvent(new CustomEvent("penn:open-product", { detail: { productId } })), 0); }} /></section>
+          <section className="app-page" hidden={activePage !== "indicators"}><IndicatorsDashboard /></section>
+          <section className="app-page" hidden={activePage !== "reports"}><ReportsDashboard /></section>
         </div>
       </section>
     </div>

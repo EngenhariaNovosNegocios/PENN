@@ -69,7 +69,7 @@ export default function OverviewDashboard({ onOpenProducts, onOpenIssues }) {
 
       <section className="overview-metrics" aria-label="Métricas principais">
         <article className="metric-card blue"><span className="metric-icon"><MetricIcon type="products" /></span><div><small>Produtos cadastrados</small><strong>{loading ? "—" : data.products.length}</strong><span>{metrics.statuses.ativo ?? 0} em operação</span></div></article>
-        <article className="metric-card red actionable"><span className="metric-icon"><MetricIcon type="issues" /></span><div><small>Problemas abertos</small><strong>{loading ? "—" : data.issues.length}</strong><span>{metrics.affected} produtos impactados</span></div><button onClick={onOpenIssues} aria-label="Abrir todos os problemas"><MetricIcon type="arrow" /></button></article>
+        <article className="metric-card red actionable"><span className="metric-icon"><MetricIcon type="issues" /></span><div><small>Pendências abertas</small><strong>{loading ? "—" : data.issues.length}</strong><span>{metrics.affected} produtos impactados</span></div><button onClick={onOpenIssues} aria-label="Abrir todas as pendências"><MetricIcon type="arrow" /></button></article>
         <article className="metric-card violet"><span className="metric-icon"><MetricIcon type="docs" /></span><div><small>Base documental</small><strong>{loading ? "—" : metrics.documents}</strong><span>{metrics.photos} fotos armazenadas</span></div></article>
         <article className="metric-card green"><span className="metric-icon"><MetricIcon type="structure" /></span><div><small>Itens de estrutura</small><strong>{loading ? "—" : data.structure.length}</strong><span>componentes mapeados</span></div></article>
       </section>
@@ -91,7 +91,7 @@ export default function OverviewDashboard({ onOpenProducts, onOpenIssues }) {
         </article>
 
         <article className="dashboard-panel issues-panel">
-          <header><div><span className="panel-kicker">Atenção necessária</span><h2>Problemas recentes</h2></div><span className="live-badge"><i /> Ao vivo</span></header>
+          <header><div><span className="panel-kicker">Atenção necessária</span><h2>Pendências recentes</h2></div><span className="live-badge"><i /> Ao vivo</span></header>
           <div className="overview-issue-list">{data.issues.slice(0, 5).map((issue) => <div key={issue.id}><span className="issue-severity">!</span><span><strong>{issue.product_code}</strong><small>{issue.description}</small></span><time>{new Date(issue.created_at).toLocaleDateString("pt-BR")}</time></div>)}{!loading && data.issues.length === 0 && <div className="overview-empty">Nenhuma pendência aberta. Excelente trabalho!</div>}</div>
         </article>
 

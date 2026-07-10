@@ -76,9 +76,10 @@ const attachmentColumns =
   "id, product_id, name, file_type, kind, storage_path, public_url, created_at";
 
 const budgetColumns =
-  "id, product_id, item_code, item_name, amount, currency, overhead_rate, quantity, unit_type, mkp, created_at";
+  "id, product_id, item_code, item_name, amount, currency, overhead_rate, quantity, unit_type, mkp, approved, structure_item_id, provisional_code, final_code, created_at";
 
 const emptyBudgetItem = { itemCode: "", itemName: "", amount: "", currency: "BRL", overheadRate: "0", quantity: "1", unitType: "UN", mkp: "1" };
+const emptyRawMaterial = { code: "", name: "", unitType: "UN" };
 
 const documentTypes = [
   "Inspeção de recebimento",
@@ -95,7 +96,7 @@ const tabs = [
   { id: "overview", label: "Resumo", icon: "overview" },
   { id: "edit", label: "Editar", icon: "edit" },
   { id: "structure", label: "Estrutura", icon: "structure" },
-  { id: "issues", label: "Problemas", icon: "issues" },
+  { id: "issues", label: "Pendências", icon: "issues" },
   { id: "fiscal", label: "Fiscal", icon: "fiscal" },
   { id: "budget", label: "Orçamento", icon: "budget" },
   { id: "documents", label: "Documentos", icon: "documents" },
@@ -141,6 +142,7 @@ export default function ProductManager() {
   const [issues, setIssues] = useState([]);
   const [attachments, setAttachments] = useState([]);
   const [budgetItems, setBudgetItems] = useState([]);
+  const [rawMaterials, setRawMaterials] = useState([]);
   const [ncmTaxes, setNcmTaxes] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [editForm, setEditForm] = useState(emptyForm);
@@ -162,6 +164,7 @@ export default function ProductManager() {
   const [isUploading, setIsUploading] = useState(false);
   const [budgetItem, setBudgetItem] = useState(emptyBudgetItem);
   const [isSavingBudget, setIsSavingBudget] = useState(false);
+  const [rawMaterialForm, setRawMaterialForm] = useState(emptyRawMaterial);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
@@ -189,6 +192,7 @@ export default function ProductManager() {
       const [details] = await Promise.all([
         loadProductDetails(loadedProducts.map((product) => product.id)),
         loadNcmTaxes(),
+        loadRawMaterials(),
       ]);
       const productsWithIssueStatus = loadedProducts.map((product) =>
         details.issues.some((issue) => issue.product_id === product.id)
@@ -208,6 +212,16 @@ export default function ProductManager() {
     () => products.find((product) => product.id === selectedId) ?? products[0],
     [products, selectedId]
   );
+
+  useEffect(() => {
+    function openExternalProduct(event) {
+      setSelectedId(event.detail.productId);
+      setViewMode("detail");
+      setActiveTab("issues");
+    }
+    window.addEventListener("penn:open-product", openExternalProduct);
+    return () => window.removeEventListener("penn:open-product", openExternalProduct);
+  }, []);
 
   useEffect(() => {
     if (!selectedProduct) {
@@ -282,6 +296,11 @@ export default function ProductManager() {
     if (!error) {
       setNcmTaxes(data ?? []);
     }
+  }
+
+  async function loadRawMaterials() {
+    const { data } = await supabase.from("raw_materials").select("id, code, name, unit_type, is_provisional, created_at").order("code");
+    setRawMaterials(data ?? []);
   }
 
   const selectedStructureItems = useMemo(
@@ -487,7 +506,7 @@ export default function ProductManager() {
     }
 
     const confirmed = window.confirm(
-      `Excluir o produto ${selectedProduct.code}? Essa acao tambem remove estrutura e problemas vinculados.`
+      `Excluir o produto ${selectedProduct.code}? Essa acao tambem remove estrutura e pendências vinculadas.`
     );
 
     if (!confirmed) {
@@ -672,6 +691,38 @@ export default function ProductManager() {
     setBudgetItems((current) => current.filter((item) => item.id !== id)); showSuccess("Item removido do orçamento.");
   }
 
+  async function addRawMaterial(event) {
+    event.preventDefault();
+    const { data, error } = await supabase.from("raw_materials").insert({ code: rawMaterialForm.code.trim().toUpperCase(), name: rawMaterialForm.name.trim(), unit_type: rawMaterialForm.unitType, is_provisional: false }).select("id, code, name, unit_type, is_provisional, created_at").single();
+    if (error) { setErrorMessage(`Nao foi possivel cadastrar a matéria-prima: ${error.message}`); return; }
+    setRawMaterials((current) => [...current, data].sort((a,b) => a.code.localeCompare(b.code))); setRawMaterialForm(emptyRawMaterial); showSuccess("Matéria-prima cadastrada.");
+  }
+
+  async function approveBudgetItem(item) {
+    const { data, error } = await supabase.from("product_budget_items").update({ approved: !item.approved }).eq("id", item.id).select(budgetColumns).single();
+    if (error) { setErrorMessage(`Nao foi possível atualizar a aprovação: ${error.message}`); return; }
+    setBudgetItems((current) => current.map((currentItem) => currentItem.id === item.id ? data : currentItem));
+  }
+
+  async function includeProvisionalStructure(item) {
+    const provisionalCode = `PROV-${selectedProduct.code}-${item.id}`;
+    const { data: structureItem, error } = await supabase.from("product_structure_items").insert({ product_id: selectedProduct.id, material_code: provisionalCode, description: item.item_name, quantity: item.quantity }).select(structureColumns).single();
+    if (error) { setErrorMessage(`Nao foi possível incluir na estrutura: ${error.message}`); return; }
+    const { data: updated } = await supabase.from("product_budget_items").update({ structure_item_id: structureItem.id, provisional_code: provisionalCode }).eq("id", item.id).select(budgetColumns).single();
+    setStructureItems((current) => [structureItem, ...current]); setBudgetItems((current) => current.map((currentItem) => currentItem.id === item.id ? updated : currentItem)); showSuccess("Item incluído na estrutura com código provisório.");
+  }
+
+  async function promoteProvisionalCode(item) {
+    const finalCode = window.prompt("Informe o código definitivo da matéria-prima:", item.item_code || "");
+    if (!finalCode?.trim()) return;
+    const normalizedCode = finalCode.trim().toUpperCase();
+    const { error } = await supabase.from("product_structure_items").update({ material_code: normalizedCode }).eq("id", item.structure_item_id);
+    if (error) { setErrorMessage(`Nao foi possível efetivar o código: ${error.message}`); return; }
+    await supabase.from("raw_materials").upsert({ code: normalizedCode, name: item.item_name, unit_type: item.unit_type, is_provisional: false }, { onConflict: "code" });
+    const { data: updated } = await supabase.from("product_budget_items").update({ final_code: normalizedCode }).eq("id", item.id).select(budgetColumns).single();
+    setStructureItems((current) => current.map((structureItem) => structureItem.id === item.structure_item_id ? { ...structureItem, material_code: normalizedCode } : structureItem)); setBudgetItems((current) => current.map((currentItem) => currentItem.id === item.id ? updated : currentItem)); await loadRawMaterials(); showSuccess("Código definitivo aplicado à estrutura.");
+  }
+
   async function uploadAttachment(event, kind) {
     event.preventDefault();
     const formElement = event.currentTarget;
@@ -767,6 +818,7 @@ export default function ProductManager() {
             <small>Índice de produtos cadastrados</small>
           </span>
         </button>
+        <button className={viewMode === "materials" ? "active" : ""} onClick={() => setViewMode("materials")} type="button"><span className="workspace-tab-icon">MP</span><span><strong>Matérias-primas</strong><small>Cadastro mestre de códigos</small></span></button>
         {selectedProduct && viewMode === "detail" && (
           <button
             className={viewMode === "detail" ? "active contextual-tab" : "contextual-tab"}
@@ -816,7 +868,7 @@ export default function ProductManager() {
                 : `${filteredProducts.length} de ${products.length}`}
             </span>
             <span className="issue-overview">
-              <strong>{issues.length}</strong> problemas abertos
+              <strong>{issues.length}</strong> pendências abertas
             </span>
           </div>
 
@@ -847,7 +899,7 @@ export default function ProductManager() {
                   </span>
                   <span className="code-row-meta">
                     {issues.filter((issue) => issue.product_id === product.id).length > 0 && (
-                      <span className="issue-count" title="Problemas abertos">
+                      <span className="issue-count" title="Pendências abertas">
                         {issues.filter((issue) => issue.product_id === product.id).length}
                       </span>
                     )}
@@ -927,7 +979,7 @@ export default function ProductManager() {
                       <dd>{selectedStructureItems.length} itens</dd>
                     </div>
                     <div>
-                      <dt>Problemas</dt>
+                      <dt>Pendências</dt>
                       <dd>{selectedIssues.length} abertos</dd>
                     </div>
                     <div>
@@ -1028,12 +1080,14 @@ export default function ProductManager() {
                     <label>
                       Codigo materia prima
                       <input
+                        list="raw-material-codes"
                         name="materialCode"
                         onChange={updateStructureField}
                         placeholder="Ex.: MP-0001"
                         required
                         value={structureForm.materialCode}
                       />
+                      <datalist id="raw-material-codes">{rawMaterials.map((material) => <option key={material.id} value={material.code}>{material.name}</option>)}</datalist>
                     </label>
                     <label>
                       Descricao do item
@@ -1091,11 +1145,11 @@ export default function ProductManager() {
               )}
 
               {activeTab === "issues" && (
-                <section className="tab-panel" aria-label="Problemas do produto">
+                <section className="tab-panel" aria-label="Pendências do produto">
                   <div className="data-list">
                     {selectedIssues.map((issue) => {
                       const resolutionNote = resolutionNotes[issue.id] ?? "";
-                      const canResolve = resolutionNote.trim().length >= 5;
+                      const canResolve = resolutionNote.trim().length >= 10;
                       return (
                       <article className="issue-card" key={issue.id}>
                         <header>
@@ -1115,7 +1169,7 @@ export default function ProductManager() {
                             value={resolutionNote}
                           />
                           <div>
-                            <small>{canResolve ? "Justificativa pronta para registro" : "Informe pelo menos 5 caracteres"}</small>
+                            <small>{canResolve ? "Justificativa pronta para registro" : "Informe pelo menos 10 caracteres"}</small>
                             <button disabled={!canResolve || resolvingIssueId === issue.id} onClick={() => resolveIssue(issue)} type="button">
                               {resolvingIssueId === issue.id ? "Resolvendo..." : "Marcar como resolvido"}
                             </button>
@@ -1215,7 +1269,7 @@ export default function ProductManager() {
                     <div className="budget-preview"><small>Valor total do item</small><strong>{formatMoney(Number(budgetItem.amount || 0) * Number(budgetItem.quantity || 0) * Number(budgetItem.mkp || 0) * (1 + Number(budgetItem.overheadRate || 0) / 100), budgetItem.currency)}</strong><span>{budgetItem.quantity || 0} {budgetItem.unitType} × MKP {budgetItem.mkp || 0} × overhead {budgetItem.overheadRate || 0}%</span></div>
                     <div className="budget-form-action"><button disabled={isSavingBudget} type="submit">{isSavingBudget ? "Adicionando..." : "Adicionar ao orçamento"}</button></div>
                   </form>
-                  <div className="budget-table"><header><span>Item</span><span>Qtd./Un.</span><span>Valor unit.</span><span>MKP</span><span>Overhead</span><span>Total</span><span /></header>{selectedBudgetItems.map((item) => <div key={item.id}><span><strong>{item.item_name}</strong><small>{item.item_code || "Sem código"}</small></span><span>{Number(item.quantity).toLocaleString("pt-BR")} {item.unit_type}</span><span>{formatMoney(item.amount,item.currency)}</span><span>{Number(item.mkp).toLocaleString("pt-BR")}×</span><span>{Number(item.overhead_rate).toLocaleString("pt-BR")}%</span><strong>{formatMoney(Number(item.amount)*Number(item.quantity)*Number(item.mkp)*(1+Number(item.overhead_rate)/100),item.currency)}</strong><button aria-label={`Excluir ${item.item_name}`} onClick={()=>deleteBudgetItem(item.id)} type="button"><ActionIcon name="trash" /></button></div>)}{selectedBudgetItems.length===0&&<p className="empty-state">Nenhum item no orçamento deste produto.</p>}</div>
+                  <div className="budget-table"><header><span>Item</span><span>Qtd./Un.</span><span>Valor unit.</span><span>MKP</span><span>Overhead</span><span>Total</span><span>Ações</span></header>{selectedBudgetItems.map((item) => <div key={item.id}><span><strong>{item.item_name}</strong><small>{item.final_code || item.provisional_code || item.item_code || "Sem código"}</small></span><span>{Number(item.quantity).toLocaleString("pt-BR")} {item.unit_type}</span><span>{formatMoney(item.amount,item.currency)}</span><span>{Number(item.mkp).toLocaleString("pt-BR")}×</span><span>{Number(item.overhead_rate).toLocaleString("pt-BR")}%</span><strong>{formatMoney(Number(item.amount)*Number(item.quantity)*Number(item.mkp)*(1+Number(item.overhead_rate)/100),item.currency)}</strong><span className="budget-row-actions"><button className={item.approved?"approved":""} onClick={()=>approveBudgetItem(item)} type="button">{item.approved?"Aprovado":"Aprovar"}</button>{item.approved&&!item.structure_item_id&&<button onClick={()=>includeProvisionalStructure(item)} type="button">Incluir provisório</button>}{item.structure_item_id&&!item.final_code&&<button onClick={()=>promoteProvisionalCode(item)} type="button">Efetivar código</button>}<button aria-label={`Excluir ${item.item_name}`} onClick={()=>deleteBudgetItem(item.id)} type="button"><ActionIcon name="trash" /></button></span></div>)}{selectedBudgetItems.length===0&&<p className="empty-state">Nenhum item no orçamento deste produto.</p>}</div>
                 </section>
               )}
 
@@ -1271,6 +1325,10 @@ export default function ProductManager() {
         )}
       </section>
         </>
+      )}
+
+      {viewMode === "materials" && (
+        <section className="materials-manager panel"><div className="panel-heading"><div><span className="form-step">Cadastro mestre</span><h2>Códigos de matéria-prima</h2></div><span>{rawMaterials.length} códigos</span></div><form className="materials-form" onSubmit={addRawMaterial}><label>Código<input required value={rawMaterialForm.code} onChange={(e)=>setRawMaterialForm({...rawMaterialForm,code:e.target.value})} placeholder="Ex.: MP-0001" /></label><label>Descrição<input required value={rawMaterialForm.name} onChange={(e)=>setRawMaterialForm({...rawMaterialForm,name:e.target.value})} placeholder="Ex.: Chapa inox 2mm" /></label><label>Unidade<select value={rawMaterialForm.unitType} onChange={(e)=>setRawMaterialForm({...rawMaterialForm,unitType:e.target.value})}>{["UN","PC","KIT","CX","KG","M","L","H"].map((unit)=><option key={unit}>{unit}</option>)}</select></label><button>Cadastrar matéria-prima</button></form><div className="materials-grid">{rawMaterials.map((material)=><article key={material.id}><span className="material-code">{material.code}</span><div><strong>{material.name}</strong><small>{material.unit_type} · {material.is_provisional ? "Provisório" : "Código oficial"}</small></div></article>)}</div></section>
       )}
 
       {viewMode === "create" && (

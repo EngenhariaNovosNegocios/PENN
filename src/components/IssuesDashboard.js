@@ -21,7 +21,7 @@ function IssueIcon({ name }) {
   return <svg aria-hidden="true" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8">{paths[name]}</svg>;
 }
 
-export default function IssuesDashboard() {
+export default function IssuesDashboard({ onOpenProduct }) {
   const [products, setProducts] = useState([]);
   const [issues, setIssues] = useState([]);
   const [form, setForm] = useState(emptyForm);
@@ -37,7 +37,7 @@ export default function IssuesDashboard() {
     ]);
     if (productsResult.error || issuesResult.error) {
       setLoadingError(
-        `Não foi possível carregar os problemas: ${
+        `Não foi possível carregar as pendências: ${
           issuesResult.error?.message ?? productsResult.error?.message
         }`
       );
@@ -70,13 +70,13 @@ export default function IssuesDashboard() {
 
   return (
     <main className="issues-page">
-      <section className="issues-hero"><div><span><IssueIcon name="alert"/> Central de ocorrências</span><h1>Problemas de produtos</h1><p>Registre, priorize e acompanhe impedimentos de todo o portfólio em um único lugar.</p></div><div className="issues-hero-stats"><div><strong>{issues.length}</strong><span>abertos</span></div><div><strong>{overdue}</strong><span>atrasados</span></div><div><strong>{critical}</strong><span>críticos</span></div></div></section>
+      <section className="issues-hero"><div><span><IssueIcon name="alert"/> Central de ocorrências</span><h1>Pendências de produtos</h1><p>Registre, priorize e acompanhe impedimentos de todo o portfólio em um único lugar.</p></div><div className="issues-hero-stats"><div><strong>{issues.length}</strong><span>abertas</span></div><div><strong>{overdue}</strong><span>atrasadas</span></div><div><strong>{critical}</strong><span>críticas</span></div></div></section>
 
       <section className="issue-register-panel">
         <header><span className="issue-register-icon"><IssueIcon name="plus"/></span><div><span className="panel-kicker">Nova ocorrência</span><h2>Registrar problema</h2></div></header>
         <form onSubmit={registerIssue}>
           <label>Código do produto<input list="product-codes" required value={form.productCode} onChange={(event) => setForm({ ...form, productCode: event.target.value })} placeholder="Ex.: PENN-001"/><datalist id="product-codes">{products.map((product) => <option key={product.id} value={product.code}>{product.name}</option>)}</datalist></label>
-          <label className="issue-description-field">Descrição do problema<textarea required rows="3" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Descreva claramente o problema encontrado..."/></label>
+          <label className="issue-description-field">Descrição da pendência<textarea minLength="10" required rows="3" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Descreva claramente a pendência encontrada (mínimo de 10 caracteres)..."/></label>
           <label>Prazo para resolução<input required type="date" value={form.dueDate} onChange={(event) => setForm({ ...form, dueDate: event.target.value })}/></label>
           <label>Prioridade<select value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })}>{Object.entries(priorityMeta).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}</select></label>
           <div className="issue-form-action"><button disabled={submitting}><IssueIcon name="plus"/>{submitting ? "Registrando..." : "Registrar problema"}</button></div>
@@ -86,8 +86,20 @@ export default function IssuesDashboard() {
 
       <section className="issues-board">
         {loadingError && <div className="issues-load-error"><span>{loadingError}</span><button onClick={loadData}>Tentar novamente</button></div>}
-        <header><div><span className="panel-kicker">Visão por produto</span><h2>Problemas abertos</h2></div><div className="priority-filters"><button className={priorityFilter === "todos" ? "active" : ""} onClick={() => setPriorityFilter("todos")}>Todos</button>{Object.entries(priorityMeta).map(([value, meta]) => <button className={priorityFilter === value ? "active" : ""} key={value} onClick={() => setPriorityFilter(value)}>{meta.label}</button>)}</div></header>
-        <div className="issue-groups">{groups.map(({ product, issues: productIssues }) => <article className="issue-product-group" key={product.id}><header><span className="issue-product-symbol"><IssueIcon name="box"/></span><div><strong>{product.code}</strong><h3>{product.name}</h3></div><span>{productIssues.length} {productIssues.length === 1 ? "problema" : "problemas"}</span></header><div>{productIssues.map((issue, index) => { const isOverdue = issue.due_date && new Date(`${issue.due_date}T23:59:59`) < new Date(); return <div className="global-issue-row" key={issue.id}><span className="issue-order">{String(index + 1).padStart(2,"0")}</span><div><strong>{issue.description}</strong><span><i className={`priority-dot ${priorityMeta[issue.priority]?.className || "medium"}`}/>{priorityMeta[issue.priority]?.label || "Média"}</span></div><span className={isOverdue ? "issue-deadline overdue" : "issue-deadline"}><IssueIcon name="calendar"/>{issue.due_date ? new Date(`${issue.due_date}T12:00:00`).toLocaleDateString("pt-BR") : "Sem prazo"}</span></div>})}</div></article>)}{groups.length === 0 && <div className="issues-empty"><IssueIcon name="alert"/><strong>Nenhum problema encontrado</strong><span>Não há ocorrências abertas com este filtro.</span></div>}</div>
+        <header><div><span className="panel-kicker">Visão por produto</span><h2>Pendências abertas</h2></div><div className="priority-filters"><button className={priorityFilter === "todos" ? "active" : ""} onClick={() => setPriorityFilter("todos")}>Todos</button>{Object.entries(priorityMeta).map(([value, meta]) => <button className={priorityFilter === value ? "active" : ""} key={value} onClick={() => setPriorityFilter(value)}>{meta.label}</button>)}</div></header>
+        <div className="issue-groups">
+          {groups.map(({ product, issues: productIssues }) => (
+            <article className="issue-product-group" key={product.id}>
+              <header className="clickable" onClick={() => onOpenProduct(product.id)}>
+                <span className="issue-product-symbol"><IssueIcon name="box"/></span>
+                <div><strong>{product.code}</strong><h3>{product.name}</h3></div>
+                <span>{productIssues.length} {productIssues.length === 1 ? "pendência" : "pendências"}</span>
+              </header>
+              <div>{productIssues.map((issue, index) => { const isOverdue = issue.due_date && new Date(`${issue.due_date}T23:59:59`) < new Date(); return <div className="global-issue-row" key={issue.id}><span className="issue-order">{String(index + 1).padStart(2,"0")}</span><div><strong>{issue.description}</strong><span><i className={`priority-dot ${priorityMeta[issue.priority]?.className || "medium"}`}/>{priorityMeta[issue.priority]?.label || "Média"}</span></div><span className={isOverdue ? "issue-deadline overdue" : "issue-deadline"}><IssueIcon name="calendar"/>{issue.due_date ? new Date(`${issue.due_date}T12:00:00`).toLocaleDateString("pt-BR") : "Sem prazo"}</span></div>})}</div>
+            </article>
+          ))}
+          {groups.length === 0 && <div className="issues-empty"><IssueIcon name="alert"/><strong>Nenhuma pendência encontrada</strong><span>Não há ocorrências abertas com este filtro.</span></div>}
+        </div>
       </section>
     </main>
   );
