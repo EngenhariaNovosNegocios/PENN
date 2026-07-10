@@ -225,6 +225,10 @@ button {
 .code-row:hover { border-color: #9db9df; color: var(--primary); background: #f7faff; transform: translateX(2px); }
 .code-row strong { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .9rem; letter-spacing: .025em; }
 .code-row span { color: #8b9aab; font-size: 1.1rem; }
+.code-identity { display: grid; gap: 4px; min-width: 0; }
+.code-identity strong { color: var(--text); }
+.code-identity small { overflow: hidden; color: var(--muted); font-family: Inter, ui-sans-serif, sans-serif; font-size: .74rem; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.code-row:hover .code-identity strong { color: var(--primary); }
 .code-row-meta { display: inline-flex; align-items: center; gap: 12px; }
 .code-row-meta .issue-count { min-width: 25px; min-height: 25px; color: var(--danger); font-size: .72rem; }
 .issue-overview { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; color: var(--muted); font-size: .75rem !important; }
@@ -528,6 +532,12 @@ button {
 .attachment-row a,.attachment-delete { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 9px; border: 1px solid var(--border); border-radius: 7px; color: var(--primary); background: #fff; font-size: .74rem; font-weight: 700; text-decoration: none; }.attachment-row a .action-icon,.attachment-delete .action-icon { width: 15px; height: 15px; }.attachment-delete { color: #7b8794; }
 .photo-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(180px,1fr)); gap: 12px; }.photo-card { overflow: hidden; border: 1px solid var(--border); border-radius: 10px; background: #fff; }.photo-card>a { display: block; aspect-ratio: 4/3; background: var(--panel-soft); }.photo-card img { display: block; width: 100%; height: 100%; object-fit: cover; }.photo-card>div { display: flex; align-items: center; gap: 8px; padding: 9px 10px; }.photo-card>div span { flex: 1; overflow: hidden; color: var(--muted); font-size: .72rem; text-overflow: ellipsis; white-space: nowrap; }.photo-card button { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px; color: #7b8794; background: var(--panel-soft); }.photo-card button:hover,.attachment-delete:hover { color: var(--danger); }
 
+.issue-card { overflow: hidden; border: 1px solid #f0cbc6; border-radius: 10px; background: #fff; }
+.issue-card>header { display: flex; align-items: flex-start; gap: 11px; padding: 14px 15px; background: #fffafa; }
+.issue-card>header>span:last-child { display: grid; gap: 4px; }.issue-card header strong { font-size: .82rem; }.issue-card header small { color: var(--muted); line-height: 1.45; }
+.issue-alert { display: grid; place-items: center; flex: 0 0 34px; height: 34px; border-radius: 8px; color: var(--danger); background: var(--danger-bg); }.issue-alert .action-icon { width: 17px; height: 17px; }
+.resolution-box { display: grid; gap: 7px; padding: 14px 15px; border-top: 1px solid #f3ddda; }.resolution-box label { color: var(--text); font-size: .78rem; font-weight: 700; }.resolution-box textarea { width: 100%; padding: 10px 11px; border: 1px solid var(--border); border-radius: 8px; color: var(--text); background: var(--panel-soft); line-height: 1.45; resize: vertical; }.resolution-box textarea:focus { outline: 2px solid rgba(36,84,166,.14); border-color: #9eb9e2; background: #fff; }.resolution-box>div { display: flex; align-items: center; justify-content: space-between; gap: 12px; }.resolution-box>div small { color: var(--muted); font-size: .7rem; }.resolution-box button { min-height: 36px; padding: 0 12px; border: 0; border-radius: 8px; color: #fff; background: var(--success); font-size: .76rem; font-weight: 700; }.resolution-box button:disabled { cursor: not-allowed; color: #94a0ad; background: #e8edf2; }
+
 .compact-form {
   display: grid;
   grid-template-columns: minmax(120px, 0.8fr) minmax(180px, 1.4fr) minmax(90px, 0.5fr) auto;
@@ -749,6 +759,8 @@ button {
   .attachment-form button { width: 100%; }
   .attachment-row { grid-template-columns: auto 1fr; }
   .attachment-row a,.attachment-delete { justify-content: center; }
+  .resolution-box>div { align-items: stretch; flex-direction: column; }
+  .resolution-box button { width: 100%; }
 
   .product-layout {
     align-items: stretch;

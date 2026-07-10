@@ -75,7 +75,7 @@ const structureColumns =
   "id, product_id, material_code, description, quantity, created_at";
 
 const issueColumns =
-  "id, product_id, product_code, description, created_at";
+  "id, product_id, product_code, description, resolution_note, resolved_at, created_at";
 
 const attachmentColumns =
   "id, product_id, name, file_type, kind, storage_path, public_url, created_at";
@@ -147,6 +147,8 @@ export default function ProductManager() {
   const [isDeletingProduct, setIsDeletingProduct] = useState(false);
   const [isAddingStructure, setIsAddingStructure] = useState(false);
   const [isAddingIssue, setIsAddingIssue] = useState(false);
+  const [resolvingIssueId, setResolvingIssueId] = useState(null);
+  const [resolutionNotes, setResolutionNotes] = useState({});
   const [documentType, setDocumentType] = useState(documentTypes[0]);
   const [documentFile, setDocumentFile] = useState(null);
   const [photoFile, setPhotoFile] = useState(null);
@@ -233,6 +235,7 @@ export default function ProductManager() {
         .from("product_issues")
         .select(issueColumns)
         .in("product_id", productIds)
+        .is("resolved_at", null)
         .order("created_at", { ascending: false }),
       supabase
         .from("product_attachments")
@@ -629,15 +632,23 @@ export default function ProductManager() {
   }
 
   async function resolveIssue(issue) {
+    const resolutionNote = resolutionNotes[issue.id]?.trim();
+    if (!resolutionNote) {
+      setErrorMessage("Escreva uma justificativa para resolver o problema.");
+      return;
+    }
+
+    setResolvingIssueId(issue.id);
     setErrorMessage("");
 
     const { error } = await supabase
       .from("product_issues")
-      .delete()
+      .update({ resolution_note: resolutionNote, resolved_at: new Date().toISOString() })
       .eq("id", issue.id);
 
     if (error) {
       setErrorMessage(`Nao foi possivel resolver o problema: ${error.message}`);
+      setResolvingIssueId(null);
       return;
     }
 
@@ -649,11 +660,17 @@ export default function ProductManager() {
     setIssues((current) =>
       current.filter((currentIssue) => currentIssue.id !== issue.id)
     );
+    setResolutionNotes((current) => {
+      const next = { ...current };
+      delete next[issue.id];
+      return next;
+    });
 
     if (remainingIssues.length === 0) {
       await saveProductStatus(issue.product_id, "ativo");
     }
 
+    setResolvingIssueId(null);
     showSuccess("Problema resolvido.");
   }
 
@@ -826,7 +843,10 @@ export default function ProductManager() {
                   }}
                   type="button"
                 >
-                  <strong>{product.code}</strong>
+                  <span className="code-identity">
+                    <strong>{product.code}</strong>
+                    <small>{product.name}</small>
+                  </span>
                   <span className="code-row-meta">
                     {issues.filter((issue) => issue.product_id === product.id).length > 0 && (
                       <span className="issue-count" title="Problemas abertos">
@@ -1101,17 +1121,36 @@ export default function ProductManager() {
                   </form>
 
                   <div className="data-list">
-                    {selectedIssues.map((issue) => (
-                      <div className="data-row issue-row" key={issue.id}>
-                        <span>
+                    {selectedIssues.map((issue) => {
+                      const resolutionNote = resolutionNotes[issue.id] ?? "";
+                      const canResolve = resolutionNote.trim().length >= 5;
+                      return (
+                      <article className="issue-card" key={issue.id}>
+                        <header>
+                          <span className="issue-alert"><ActionIcon name="issues" /></span>
+                          <span>
                           <strong>{issue.product_code}</strong>
                           <small>{issue.description}</small>
-                        </span>
-                        <button onClick={() => resolveIssue(issue)} type="button">
-                          Resolver
-                        </button>
-                      </div>
-                    ))}
+                          </span>
+                        </header>
+                        <div className="resolution-box">
+                          <label htmlFor={`resolution-${issue.id}`}>Justificativa da resolução</label>
+                          <textarea
+                            id={`resolution-${issue.id}`}
+                            onChange={(event) => setResolutionNotes((current) => ({ ...current, [issue.id]: event.target.value }))}
+                            placeholder="Descreva o que foi feito para resolver este problema..."
+                            rows="3"
+                            value={resolutionNote}
+                          />
+                          <div>
+                            <small>{canResolve ? "Justificativa pronta para registro" : "Informe pelo menos 5 caracteres"}</small>
+                            <button disabled={!canResolve || resolvingIssueId === issue.id} onClick={() => resolveIssue(issue)} type="button">
+                              {resolvingIssueId === issue.id ? "Resolvendo..." : "Marcar como resolvido"}
+                            </button>
+                          </div>
+                        </div>
+                      </article>
+                    )})}
 
                     {selectedIssues.length === 0 && (
                       <p className="empty-state">

@@ -38,6 +38,21 @@ create table if not exists public.product_issues (
   created_at timestamptz not null default now()
 );
 
+alter table public.product_issues
+add column if not exists resolution_note text;
+
+alter table public.product_issues
+add column if not exists resolved_at timestamptz;
+
+alter table public.product_issues
+drop constraint if exists product_issues_resolution_check;
+
+alter table public.product_issues
+add constraint product_issues_resolution_check check (
+  resolved_at is null
+  or length(trim(coalesce(resolution_note, ''))) >= 5
+);
+
 create table if not exists public.product_attachments (
   id bigint primary key generated always as identity,
   product_id bigint not null references public.products(id) on delete cascade,
