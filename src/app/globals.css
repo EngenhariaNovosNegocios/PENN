@@ -116,6 +116,8 @@ button {
   background: #e9eef4;
 }
 
+.workspace-tabs.has-context { grid-template-columns: repeat(3, minmax(180px, 1fr)); }
+
 .workspace-tabs button {
   display: flex;
   align-items: center;
@@ -213,6 +215,16 @@ button {
   gap: 18px;
   align-items: start;
 }
+
+.product-layout.codes-only { display: block; }
+.product-layout.codes-only .product-list { width: min(100%, 760px); }
+.product-layout.detail-only { display: block; }
+.product-layout.detail-only .product-detail { width: 100%; }
+
+.code-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; min-height: 54px; padding: 0 16px; border: 1px solid var(--border); border-radius: 9px; color: var(--text); background: #fff; text-align: left; transition: .18s ease; }
+.code-row:hover { border-color: #9db9df; color: var(--primary); background: #f7faff; transform: translateX(2px); }
+.code-row strong { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .9rem; letter-spacing: .025em; }
+.code-row span { color: #8b9aab; font-size: 1.1rem; }
 
 .panel {
   background: var(--panel);
@@ -484,13 +496,7 @@ button {
   color: var(--primary);
 }
 
-.tab-marker {
-  width: 8px;
-  height: 8px;
-  flex: 0 0 8px;
-  border: 2px solid #a9b5c3;
-  border-radius: 50%;
-}
+.action-icon { width: 18px; height: 18px; flex: 0 0 18px; }
 
 .detail-tabs button.active {
   border-color: #9eb9e2;
@@ -499,7 +505,7 @@ button {
   color: var(--primary);
 }
 
-.detail-tabs button.active .tab-marker { border-color: var(--primary); background: var(--primary); box-shadow: 0 0 0 3px var(--blue-bg); }
+.detail-tabs button.active .action-icon { filter: drop-shadow(0 2px 3px rgba(36,84,166,.18)); }
 
 .tab-panel {
   display: grid;
@@ -549,6 +555,10 @@ button {
   padding: 0 14px;
   white-space: nowrap;
 }
+
+.compact-form > button,
+.ghost-danger-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+.compact-form > button .action-icon,.ghost-danger-button .action-icon { width: 16px; height: 16px; flex-basis: 16px; }
 
 .compact-form button:disabled {
   cursor: not-allowed;
@@ -738,7 +748,7 @@ button {
     padding: 24px 12px 36px;
   }
 
-  .workspace-tabs { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+  .workspace-tabs,.workspace-tabs.has-context { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
   .workspace-tabs button { min-width: 0; padding: 8px 10px; }
   .workspace-tabs small { display: none; }
   .workspace-tab-icon { flex: 0 0 28px; width: 28px; height: 28px; }

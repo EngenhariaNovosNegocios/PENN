@@ -81,12 +81,25 @@ const ncmTaxColumns =
   "id, ncm, description, ipi_rate, pis_rate, cofins_rate, icms_rate, import_tax_rate, updated_at";
 
 const tabs = [
-  { id: "overview", label: "Resumo" },
-  { id: "edit", label: "Editar" },
-  { id: "structure", label: "Estrutura" },
-  { id: "issues", label: "Problemas" },
-  { id: "fiscal", label: "Fiscal" },
+  { id: "overview", label: "Resumo", icon: "overview" },
+  { id: "edit", label: "Editar", icon: "edit" },
+  { id: "structure", label: "Estrutura", icon: "structure" },
+  { id: "issues", label: "Problemas", icon: "issues" },
+  { id: "fiscal", label: "Fiscal", icon: "fiscal" },
 ];
+
+function ActionIcon({ name }) {
+  const paths = {
+    overview: <><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></>,
+    edit: <><path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10Z"/><path d="m14 7 3 3"/></>,
+    structure: <><path d="M12 3v6M6 21v-5h12v5M6 16v-3h12v3"/><circle cx="12" cy="10" r="2"/></>,
+    issues: <><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.7 2.6 18a2 2 0 0 0 1.8 3h15.2a2 2 0 0 0 1.8-3L13.7 3.7a2 2 0 0 0-3.4 0Z"/></>,
+    fiscal: <><path d="M6 2h9l4 4v16H6Z"/><path d="M14 2v5h5M9 12h7M9 16h7"/></>,
+    plus: <path d="M12 5v14M5 12h14"/>,
+    trash: <><path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6"/></>,
+  };
+  return <svg className="action-icon" aria-hidden="true" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8">{paths[name]}</svg>;
+}
 
 function normalizeNcm(value) {
   return value?.replace(/\D/g, "") ?? "";
@@ -111,7 +124,6 @@ export default function ProductManager() {
   const [activeTab, setActiveTab] = useState("overview");
   const [viewMode, setViewMode] = useState("catalog");
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("todos");
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
@@ -251,38 +263,10 @@ export default function ProductManager() {
   const filteredProducts = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
 
-    return products.filter((product) => {
-      const matchesStatus =
-        statusFilter === "todos" || product.status === statusFilter;
-      const searchable = [
-        product.name,
-        product.code,
-        product.category,
-        product.owner,
-        product.ncm,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-
-      return matchesStatus && (!query || searchable.includes(query));
-    });
-  }, [products, searchTerm, statusFilter]);
-
-  const statusTotals = useMemo(
-    () =>
-      products.reduce((totals, product) => {
-        totals[product.status] = (totals[product.status] ?? 0) + 1;
-        return totals;
-      }, {}),
-    [products]
-  );
-
-  const openIssueTotal = issues.length;
-
-  function countIssues(productId) {
-    return issues.filter((issue) => issue.product_id === productId).length;
-  }
+    return products.filter((product) =>
+      !query || product.code?.toLowerCase().includes(query)
+    );
+  }, [products, searchTerm]);
 
   function showSuccess(message) {
     setSuccessMessage(message);
@@ -637,7 +621,7 @@ export default function ProductManager() {
         </div>
       </header>
 
-      <nav className="workspace-tabs" aria-label="Áreas de produtos">
+      <nav className={`workspace-tabs ${viewMode === "detail" ? "has-context" : ""}`} aria-label="Áreas de produtos">
         <button
           className={viewMode === "catalog" ? "active" : ""}
           onClick={() => setViewMode("catalog")}
@@ -645,10 +629,23 @@ export default function ProductManager() {
         >
           <span className="workspace-tab-icon">▦</span>
           <span>
-            <strong>Catálogo</strong>
-            <small>Consultar e gerenciar produtos</small>
+            <strong>Códigos</strong>
+            <small>Índice de produtos cadastrados</small>
           </span>
         </button>
+        {selectedProduct && viewMode === "detail" && (
+          <button
+            className={viewMode === "detail" ? "active contextual-tab" : "contextual-tab"}
+            onClick={() => setViewMode("detail")}
+            type="button"
+          >
+            <span className="workspace-tab-icon">#</span>
+            <span>
+              <strong>{selectedProduct.code}</strong>
+              <small>Detalhes do produto</small>
+            </span>
+          </button>
+        )}
         <button
           className={viewMode === "create" ? "active" : ""}
           onClick={() => setViewMode("create")}
@@ -669,36 +666,16 @@ export default function ProductManager() {
         </section>
       )}
 
-      {viewMode === "catalog" && (
+      {(viewMode === "catalog" || viewMode === "detail") && (
         <>
-      <section className="summary-grid" aria-label="Resumo operacional">
-        {Object.entries(statusOptions).map(([status, option]) => (
-          <button
-            className={`summary-item ${
-              statusFilter === status ? "selected" : ""
-            }`}
-            key={status}
-            onClick={() =>
-              setStatusFilter(statusFilter === status ? "todos" : status)
-            }
-            type="button"
-          >
-            <span className={`status-dot ${status}`} />
-            <strong>{statusTotals[status] ?? 0}</strong>
-            <span>{option.label}</span>
-          </button>
-        ))}
-        <div className="summary-item issue-summary">
-          <span className="status-dot issue" />
-          <strong>{openIssueTotal}</strong>
-          <span>Problemas abertos</span>
-        </div>
-      </section>
-
-      <section className="product-layout">
+      <section className={`product-layout ${viewMode === "detail" ? "detail-only" : "codes-only"}`}>
+        {viewMode === "catalog" && (
         <aside className="panel product-list" aria-label="Lista de produtos">
           <div className="panel-heading">
-            <h2>Produtos</h2>
+            <div>
+              <span className="form-step">Índice</span>
+              <h2>Códigos de produtos</h2>
+            </div>
             <span>
               {isLoading
                 ? "Carregando"
@@ -709,61 +686,37 @@ export default function ProductManager() {
           <div className="list-controls">
             <input
               onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Buscar por nome, codigo ou NCM..."
+              placeholder="Buscar código..."
               type="search"
               value={searchTerm}
             />
-            <select
-              onChange={(event) => setStatusFilter(event.target.value)}
-              value={statusFilter}
-            >
-              <option value="todos">Todos os status</option>
-              {Object.entries(statusOptions).map(([value, option]) => (
-                <option key={value} value={value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
           </div>
 
           <div className="product-list-items">
-            {filteredProducts.map((product) => {
-              const productIssueCount = countIssues(product.id);
-
-              return (
+            {filteredProducts.map((product) => (
                 <button
-                  className={`product-row ${
-                    product.id === selectedProduct?.id ? "selected" : ""
-                  }`}
+                  className="code-row"
                   key={product.id}
-                  onClick={() => setSelectedId(product.id)}
+                  onClick={() => {
+                    setSelectedId(product.id);
+                    setActiveTab("overview");
+                    setViewMode("detail");
+                  }}
                   type="button"
                 >
-                  <span>
-                    <strong>{product.name}</strong>
-                    <small>
-                      {product.code} - {product.category || "Sem categoria"}
-                    </small>
-                    {product.ncm && <small>NCM {product.ncm}</small>}
-                  </span>
-                  <span className="row-badges">
-                    {productIssueCount > 0 && (
-                      <span className="issue-count">{productIssueCount}</span>
-                    )}
-                    <span className={`status-badge ${product.status}`}>
-                      {statusOptions[product.status]?.label ?? product.status}
-                    </span>
-                  </span>
+                  <strong>{product.code}</strong>
+                  <span aria-hidden="true">→</span>
                 </button>
-              );
-            })}
+              ))}
 
             {!isLoading && filteredProducts.length === 0 && (
               <p className="empty-state">Nenhum produto encontrado.</p>
             )}
           </div>
         </aside>
+        )}
 
+        {viewMode === "detail" && (
         <section className="panel product-detail" aria-label="Detalhes do produto">
           {!selectedProduct && (
             <p className="empty-state">Cadastre ou selecione um produto.</p>
@@ -801,7 +754,7 @@ export default function ProductManager() {
                     onClick={() => openTab(tab.id)}
                     type="button"
                   >
-                    <span className="tab-marker" />
+                    <ActionIcon name={tab.icon} />
                     <span>{tab.label}</span>
                   </button>
                 ))}
@@ -959,6 +912,7 @@ export default function ProductManager() {
                       />
                     </label>
                     <button disabled={isAddingStructure} type="submit">
+                      <ActionIcon name="plus" />
                       {isAddingStructure ? "Adicionando..." : "Adicionar"}
                     </button>
                   </form>
@@ -976,6 +930,7 @@ export default function ProductManager() {
                           onClick={() => deleteStructureItem(item.id)}
                           type="button"
                         >
+                          <ActionIcon name="trash" />
                           Excluir
                         </button>
                       </div>
@@ -1101,6 +1056,7 @@ export default function ProductManager() {
             </>
           )}
         </section>
+        )}
       </section>
         </>
       )}
