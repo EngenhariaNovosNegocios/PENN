@@ -75,6 +75,11 @@ const issueColumns =
 const attachmentColumns =
   "id, product_id, name, file_type, kind, storage_path, public_url, created_at";
 
+const budgetColumns =
+  "id, product_id, item_code, item_name, amount, currency, overhead_rate, quantity, unit_type, mkp, created_at";
+
+const emptyBudgetItem = { itemCode: "", itemName: "", amount: "", currency: "BRL", overheadRate: "0", quantity: "1", unitType: "UN", mkp: "1" };
+
 const documentTypes = [
   "Inspeção de recebimento",
   "Especificação de compra",
@@ -92,6 +97,7 @@ const tabs = [
   { id: "structure", label: "Estrutura", icon: "structure" },
   { id: "issues", label: "Problemas", icon: "issues" },
   { id: "fiscal", label: "Fiscal", icon: "fiscal" },
+  { id: "budget", label: "Orçamento", icon: "budget" },
   { id: "documents", label: "Documentos", icon: "documents" },
   { id: "photos", label: "Fotos", icon: "photos" },
 ];
@@ -103,6 +109,7 @@ function ActionIcon({ name }) {
     structure: <><path d="M12 3v6M6 21v-5h12v5M6 16v-3h12v3"/><circle cx="12" cy="10" r="2"/></>,
     issues: <><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.7 2.6 18a2 2 0 0 0 1.8 3h15.2a2 2 0 0 0 1.8-3L13.7 3.7a2 2 0 0 0-3.4 0Z"/></>,
     fiscal: <><path d="M6 2h9l4 4v16H6Z"/><path d="M14 2v5h5M9 12h7M9 16h7"/></>,
+    budget: <><circle cx="12" cy="12" r="9"/><path d="M16 8.5c-.8-.7-2-1-3.3-1-1.8 0-3.2.8-3.2 2s1.1 1.8 3.2 2.2 3.3 1 3.3 2.4-1.4 2.4-3.4 2.4c-1.4 0-2.8-.4-3.7-1.2M12.5 5v14"/></>,
     documents: <><path d="M7 2h8l4 4v16H7Z"/><path d="M14 2v5h5M10 12h6M10 16h6"/></>,
     photos: <><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 15-5-5L5 20"/></>,
     download: <><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></>,
@@ -122,11 +129,18 @@ function formatRate(value) {
   })}%`;
 }
 
+function formatMoney(value, currency) {
+  return Number(value ?? 0).toLocaleString(currency === "USD" ? "en-US" : "pt-BR", {
+    style: "currency", currency,
+  });
+}
+
 export default function ProductManager() {
   const [products, setProducts] = useState([]);
   const [structureItems, setStructureItems] = useState([]);
   const [issues, setIssues] = useState([]);
   const [attachments, setAttachments] = useState([]);
+  const [budgetItems, setBudgetItems] = useState([]);
   const [ncmTaxes, setNcmTaxes] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [editForm, setEditForm] = useState(emptyForm);
@@ -146,6 +160,8 @@ export default function ProductManager() {
   const [documentFile, setDocumentFile] = useState(null);
   const [photoFile, setPhotoFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [budgetItem, setBudgetItem] = useState(emptyBudgetItem);
+  const [isSavingBudget, setIsSavingBudget] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
@@ -215,10 +231,11 @@ export default function ProductManager() {
       setStructureItems([]);
       setIssues([]);
       setAttachments([]);
-      return { issues: [], structureItems: [], attachments: [] };
+      setBudgetItems([]);
+      return { issues: [], structureItems: [], attachments: [], budgetItems: [] };
     }
 
-    const [structureResult, issuesResult, attachmentsResult] = await Promise.all([
+    const [structureResult, issuesResult, attachmentsResult, budgetResult] = await Promise.all([
       supabase
         .from("product_structure_items")
         .select(structureColumns)
@@ -235,6 +252,11 @@ export default function ProductManager() {
         .select(attachmentColumns)
         .in("product_id", productIds)
         .order("created_at", { ascending: false }),
+      supabase
+        .from("product_budget_items")
+        .select(budgetColumns)
+        .in("product_id", productIds)
+        .order("created_at", { ascending: false }),
     ]);
 
     const nextStructureItems = structureResult.error
@@ -242,11 +264,13 @@ export default function ProductManager() {
       : structureResult.data ?? [];
     const nextIssues = issuesResult.error ? [] : issuesResult.data ?? [];
     const nextAttachments = attachmentsResult.error ? [] : attachmentsResult.data ?? [];
+    const nextBudgetItems = budgetResult.error ? [] : budgetResult.data ?? [];
 
     setStructureItems(nextStructureItems);
     setIssues(nextIssues);
     setAttachments(nextAttachments);
-    return { issues: nextIssues, structureItems: nextStructureItems, attachments: nextAttachments };
+    setBudgetItems(nextBudgetItems);
+    return { issues: nextIssues, structureItems: nextStructureItems, attachments: nextAttachments, budgetItems: nextBudgetItems };
   }
 
   async function loadNcmTaxes() {
@@ -281,6 +305,11 @@ export default function ProductManager() {
   const selectedPhotos = useMemo(
     () => attachments.filter((item) => item.product_id === selectedProduct?.id && item.kind === "photo"),
     [attachments, selectedProduct]
+  );
+
+  const selectedBudgetItems = useMemo(
+    () => budgetItems.filter((item) => item.product_id === selectedProduct?.id),
+    [budgetItems, selectedProduct]
   );
 
   const selectedNcmTax = useMemo(() => {
@@ -500,6 +529,9 @@ export default function ProductManager() {
     setAttachments((current) =>
       current.filter((item) => item.product_id !== selectedProduct.id)
     );
+    setBudgetItems((current) =>
+      current.filter((item) => item.product_id !== selectedProduct.id)
+    );
     setSelectedId(remainingProducts[0]?.id ?? null);
     setActiveTab("overview");
     setIsDeletingProduct(false);
@@ -613,6 +645,31 @@ export default function ProductManager() {
 
     setResolvingIssueId(null);
     showSuccess("Problema resolvido.");
+  }
+
+  async function addBudgetItem(event) {
+    event.preventDefault();
+    if (!selectedProduct || !budgetItem.itemName.trim() || Number(budgetItem.amount) < 0 || Number(budgetItem.quantity) <= 0 || Number(budgetItem.mkp) <= 0) return;
+    setIsSavingBudget(true); setErrorMessage("");
+    const { data, error } = await supabase.from("product_budget_items").insert({
+      product_id: selectedProduct.id,
+      item_code: budgetItem.itemCode.trim() || null,
+      item_name: budgetItem.itemName.trim(),
+      amount: Number(budgetItem.amount),
+      currency: budgetItem.currency,
+      overhead_rate: Number(budgetItem.overheadRate || 0),
+      quantity: Number(budgetItem.quantity || 1),
+      unit_type: budgetItem.unitType,
+      mkp: Number(budgetItem.mkp || 1),
+    }).select(budgetColumns).single();
+    if (error) { setErrorMessage(`Nao foi possivel adicionar o item: ${error.message}`); setIsSavingBudget(false); return; }
+    setBudgetItems((current) => [data, ...current]); setBudgetItem(emptyBudgetItem); setIsSavingBudget(false); showSuccess("Item adicionado ao orçamento.");
+  }
+
+  async function deleteBudgetItem(id) {
+    const { error } = await supabase.from("product_budget_items").delete().eq("id", id);
+    if (error) { setErrorMessage(`Nao foi possivel excluir o item: ${error.message}`); return; }
+    setBudgetItems((current) => current.filter((item) => item.id !== id)); showSuccess("Item removido do orçamento.");
   }
 
   async function uploadAttachment(event, kind) {
@@ -1134,6 +1191,31 @@ export default function ProductManager() {
                       </p>
                     )}
                   </div>
+                </section>
+              )}
+
+              {activeTab === "budget" && (
+                <section className="tab-panel budget-panel" aria-label="Orçamento do produto">
+                  <div className="budget-summary">
+                    {["BRL", "USD"].map((currency) => {
+                      const total = selectedBudgetItems.filter((item) => item.currency === currency).reduce((sum, item) => sum + Number(item.amount) * Number(item.quantity) * Number(item.mkp) * (1 + Number(item.overhead_rate) / 100), 0);
+                      return <article key={currency}><span className="budget-currency-icon"><ActionIcon name="budget" /></span><div><small>Total em {currency}</small><strong>{formatMoney(total, currency)}</strong><span>{selectedBudgetItems.filter((item) => item.currency === currency).length} itens</span></div></article>;
+                    })}
+                  </div>
+                  <form className="budget-form" onSubmit={addBudgetItem}>
+                    <div className="budget-form-heading"><span className="budget-currency-icon"><ActionIcon name="budget" /></span><div><strong>Novo item</strong><small>Valor unitário × quantidade × MKP + overhead</small></div></div>
+                    <label>Código opcional<input value={budgetItem.itemCode} onChange={(e) => setBudgetItem({...budgetItem,itemCode:e.target.value})} placeholder="Ex.: MP-001" /></label>
+                    <label>Nome do produto ou item<input required value={budgetItem.itemName} onChange={(e) => setBudgetItem({...budgetItem,itemName:e.target.value})} placeholder="Ex.: Fonte de alimentação" /></label>
+                    <label>Valor base<input min="0" required step="0.01" type="number" value={budgetItem.amount} onChange={(e) => setBudgetItem({...budgetItem,amount:e.target.value})} placeholder="0,00" /></label>
+                    <label>Moeda<select value={budgetItem.currency} onChange={(e) => setBudgetItem({...budgetItem,currency:e.target.value})}><option value="BRL">BRL — Real</option><option value="USD">USD — Dólar</option></select></label>
+                    <label>Quantidade<input min="0.01" required step="0.01" type="number" value={budgetItem.quantity} onChange={(e) => setBudgetItem({...budgetItem,quantity:e.target.value})} /></label>
+                    <label>Unidade<select value={budgetItem.unitType} onChange={(e) => setBudgetItem({...budgetItem,unitType:e.target.value})}><option value="UN">UN — Unidade</option><option value="PC">PC — Peça</option><option value="KIT">KIT</option><option value="CX">CX — Caixa</option><option value="KG">KG — Quilograma</option><option value="M">M — Metro</option><option value="L">L — Litro</option><option value="H">H — Hora</option></select></label>
+                    <label>MKP (multiplicador)<input min="0.01" required step="0.01" type="number" value={budgetItem.mkp} onChange={(e) => setBudgetItem({...budgetItem,mkp:e.target.value})} /></label>
+                    <label>Overhead (%)<input min="0" required step="0.01" type="number" value={budgetItem.overheadRate} onChange={(e) => setBudgetItem({...budgetItem,overheadRate:e.target.value})} placeholder="0" /></label>
+                    <div className="budget-preview"><small>Valor total do item</small><strong>{formatMoney(Number(budgetItem.amount || 0) * Number(budgetItem.quantity || 0) * Number(budgetItem.mkp || 0) * (1 + Number(budgetItem.overheadRate || 0) / 100), budgetItem.currency)}</strong><span>{budgetItem.quantity || 0} {budgetItem.unitType} × MKP {budgetItem.mkp || 0} × overhead {budgetItem.overheadRate || 0}%</span></div>
+                    <div className="budget-form-action"><button disabled={isSavingBudget} type="submit">{isSavingBudget ? "Adicionando..." : "Adicionar ao orçamento"}</button></div>
+                  </form>
+                  <div className="budget-table"><header><span>Item</span><span>Qtd./Un.</span><span>Valor unit.</span><span>MKP</span><span>Overhead</span><span>Total</span><span /></header>{selectedBudgetItems.map((item) => <div key={item.id}><span><strong>{item.item_name}</strong><small>{item.item_code || "Sem código"}</small></span><span>{Number(item.quantity).toLocaleString("pt-BR")} {item.unit_type}</span><span>{formatMoney(item.amount,item.currency)}</span><span>{Number(item.mkp).toLocaleString("pt-BR")}×</span><span>{Number(item.overhead_rate).toLocaleString("pt-BR")}%</span><strong>{formatMoney(Number(item.amount)*Number(item.quantity)*Number(item.mkp)*(1+Number(item.overhead_rate)/100),item.currency)}</strong><button aria-label={`Excluir ${item.item_name}`} onClick={()=>deleteBudgetItem(item.id)} type="button"><ActionIcon name="trash" /></button></div>)}{selectedBudgetItems.length===0&&<p className="empty-state">Nenhum item no orçamento deste produto.</p>}</div>
                 </section>
               )}
 

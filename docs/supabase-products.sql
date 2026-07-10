@@ -108,6 +108,31 @@ create table if not exists public.product_development_tasks (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.product_budget_items (
+  id bigint primary key generated always as identity,
+  product_id bigint not null references public.products(id) on delete cascade,
+  item_code text,
+  item_name text not null,
+  amount numeric not null check (amount >= 0),
+  currency text not null default 'BRL' check (currency in ('BRL', 'USD')),
+  overhead_rate numeric not null default 0 check (overhead_rate >= 0),
+  quantity numeric not null default 1 check (quantity > 0),
+  unit_type text not null default 'UN' check (unit_type in ('UN', 'PC', 'KIT', 'CX', 'KG', 'M', 'L', 'H')),
+  mkp numeric not null default 1 check (mkp > 0),
+  created_at timestamptz not null default now()
+);
+
+alter table public.product_budget_items add column if not exists quantity numeric not null default 1;
+alter table public.product_budget_items add column if not exists unit_type text not null default 'UN';
+alter table public.product_budget_items add column if not exists mkp numeric not null default 1;
+
+alter table public.product_budget_items drop constraint if exists product_budget_items_quantity_check;
+alter table public.product_budget_items add constraint product_budget_items_quantity_check check (quantity > 0);
+alter table public.product_budget_items drop constraint if exists product_budget_items_unit_type_check;
+alter table public.product_budget_items add constraint product_budget_items_unit_type_check check (unit_type in ('UN', 'PC', 'KIT', 'CX', 'KG', 'M', 'L', 'H'));
+alter table public.product_budget_items drop constraint if exists product_budget_items_mkp_check;
+alter table public.product_budget_items add constraint product_budget_items_mkp_check check (mkp > 0);
+
 insert into storage.buckets (id, name, public)
 values ('product-files', 'product-files', true)
 on conflict (id) do update set public = excluded.public;
@@ -118,6 +143,7 @@ alter table public.ncm_taxes enable row level security;
 alter table public.product_attachments enable row level security;
 alter table public.product_development_projects enable row level security;
 alter table public.product_development_tasks enable row level security;
+alter table public.product_budget_items enable row level security;
 
 grant select, insert, delete on public.product_structure_items to anon;
 grant select, insert, update, delete on public.product_issues to anon;
@@ -126,6 +152,7 @@ grant update, delete on public.products to anon;
 grant select, insert, delete on public.product_attachments to anon;
 grant select, insert, update, delete on public.product_development_projects to anon;
 grant select, insert, update, delete on public.product_development_tasks to anon;
+grant select, insert, update, delete on public.product_budget_items to anon;
 
 drop policy if exists "ncm_taxes_select" on public.ncm_taxes;
 drop policy if exists "product_structure_items_select" on public.product_structure_items;
@@ -145,6 +172,7 @@ drop policy if exists "product_files_insert" on storage.objects;
 drop policy if exists "product_files_delete" on storage.objects;
 drop policy if exists "development_projects_all" on public.product_development_projects;
 drop policy if exists "development_tasks_all" on public.product_development_tasks;
+drop policy if exists "product_budget_items_all" on public.product_budget_items;
 
 create policy "ncm_taxes_select"
 on public.ncm_taxes
@@ -235,4 +263,8 @@ using (true) with check (true);
 
 create policy "development_tasks_all"
 on public.product_development_tasks for all to anon
+using (true) with check (true);
+
+create policy "product_budget_items_all"
+on public.product_budget_items for all to anon
 using (true) with check (true);
