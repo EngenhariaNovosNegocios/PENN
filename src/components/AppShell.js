@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import OverviewDashboard from "@/components/OverviewDashboard";
 
 const Icon = ({ name }) => {
   const paths = {
@@ -16,8 +17,8 @@ const Icon = ({ name }) => {
 };
 
 const navigation = [
-  { label: "Visão geral", icon: "grid", disabled: true },
-  { label: "Produtos", icon: "box", active: true },
+  { id: "overview", label: "Visão geral", icon: "grid" },
+  { id: "products", label: "Produtos", icon: "box" },
   { label: "Indicadores", icon: "chart", disabled: true },
   { label: "Relatórios", icon: "file", disabled: true },
 ];
@@ -25,17 +26,18 @@ const navigation = [
 export default function AppShell({ children }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [activePage, setActivePage] = useState("overview");
   return (
     <div className={`app-shell ${collapsed ? "sidebar-collapsed" : ""}`}>
       <aside className={`app-sidebar ${menuOpen ? "mobile-open" : ""}`}>
         <div className="brand"><span className="brand-mark">P</span><span className="brand-copy"><strong>PENN</strong><small>Engenharia & Negócios</small></span><button className="mobile-close" onClick={() => setMenuOpen(false)} aria-label="Fechar menu"><Icon name="close" /></button></div>
-        <nav className="primary-nav" aria-label="Navegação principal"><span className="nav-section-label">Workspace</span>{navigation.map((item) => <button className={`nav-item ${item.active ? "active" : ""}`} disabled={item.disabled} key={item.label} title={collapsed ? item.label : undefined}><Icon name={item.icon}/><span>{item.label}</span>{item.disabled && <small>Em breve</small>}</button>)}</nav>
+        <nav className="primary-nav" aria-label="Navegação principal"><span className="nav-section-label">Workspace</span>{navigation.map((item) => <button className={`nav-item ${activePage === item.id ? "active" : ""}`} disabled={item.disabled} key={item.label} onClick={() => { if (item.id) setActivePage(item.id); setMenuOpen(false); }} title={collapsed ? item.label : undefined}><Icon name={item.icon}/><span>{item.label}</span>{item.disabled && <small>Em breve</small>}</button>)}</nav>
         <div className="sidebar-footer"><button className="nav-item" disabled><Icon name="settings"/><span>Configurações</span></button><button className="nav-item" disabled><Icon name="help"/><span>Ajuda</span></button><div className="user-card"><span className="avatar">EN</span><span><strong>Equipe PENN</strong><small>Engenharia</small></span><span className="online-dot"/></div></div>
       </aside>
       {menuOpen && <button className="sidebar-backdrop" onClick={() => setMenuOpen(false)} aria-label="Fechar menu"/>}
       <section className="app-stage">
-        <header className="topbar"><button className="menu-trigger desktop" onClick={() => setCollapsed(!collapsed)} aria-label={collapsed ? "Expandir menu" : "Recolher menu"}><Icon name="menu"/></button><button className="menu-trigger mobile" onClick={() => setMenuOpen(true)} aria-label="Abrir menu"><Icon name="menu"/></button><div className="breadcrumb"><span>Portal PENN</span><b>/</b><strong>Produtos</strong></div><div className="topbar-actions"><span className="environment"><i/> Ambiente interno</span><button className="notification" aria-label="Notificações">●</button></div></header>
-        <div className="main-content">{children}</div>
+        <header className="topbar"><button className="menu-trigger desktop" onClick={() => setCollapsed(!collapsed)} aria-label={collapsed ? "Expandir menu" : "Recolher menu"}><Icon name="menu"/></button><button className="menu-trigger mobile" onClick={() => setMenuOpen(true)} aria-label="Abrir menu"><Icon name="menu"/></button><div className="breadcrumb"><span>Portal PENN</span><b>/</b><strong>{activePage === "overview" ? "Visão geral" : "Produtos"}</strong></div><div className="topbar-actions"><span className="environment"><i/> Ambiente interno</span><button className="notification" aria-label="Notificações">●</button></div></header>
+        <div className="main-content">{activePage === "overview" ? <OverviewDashboard onOpenProducts={() => setActivePage("products")} /> : children}</div>
       </section>
     </div>
   );
