@@ -78,6 +78,36 @@ create table if not exists public.product_attachments (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.product_development_projects (
+  id bigint primary key generated always as identity,
+  product_id bigint not null unique references public.products(id) on delete cascade,
+  requester text not null,
+  owner text not null,
+  target_launch_date date,
+  target_price numeric,
+  expected_demand text,
+  potential_clients text,
+  market_potential text,
+  technical_specs text,
+  development_reason text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.product_development_tasks (
+  id bigint primary key generated always as identity,
+  project_id bigint not null references public.product_development_projects(id) on delete cascade,
+  stage_key text not null,
+  title text not null,
+  owner_area text,
+  status text not null default 'pending' check (status in ('pending', 'in_progress', 'blocked', 'completed', 'not_applicable')),
+  due_date date,
+  notes text,
+  sort_order integer not null default 0,
+  completed_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
 insert into storage.buckets (id, name, public)
 values ('product-files', 'product-files', true)
 on conflict (id) do update set public = excluded.public;
@@ -86,12 +116,16 @@ alter table public.product_structure_items enable row level security;
 alter table public.product_issues enable row level security;
 alter table public.ncm_taxes enable row level security;
 alter table public.product_attachments enable row level security;
+alter table public.product_development_projects enable row level security;
+alter table public.product_development_tasks enable row level security;
 
 grant select, insert, delete on public.product_structure_items to anon;
 grant select, insert, update, delete on public.product_issues to anon;
 grant select on public.ncm_taxes to anon;
 grant update, delete on public.products to anon;
 grant select, insert, delete on public.product_attachments to anon;
+grant select, insert, update, delete on public.product_development_projects to anon;
+grant select, insert, update, delete on public.product_development_tasks to anon;
 
 drop policy if exists "ncm_taxes_select" on public.ncm_taxes;
 drop policy if exists "product_structure_items_select" on public.product_structure_items;
@@ -109,6 +143,8 @@ drop policy if exists "product_attachments_delete" on public.product_attachments
 drop policy if exists "product_files_select" on storage.objects;
 drop policy if exists "product_files_insert" on storage.objects;
 drop policy if exists "product_files_delete" on storage.objects;
+drop policy if exists "development_projects_all" on public.product_development_projects;
+drop policy if exists "development_tasks_all" on public.product_development_tasks;
 
 create policy "ncm_taxes_select"
 on public.ncm_taxes
@@ -192,3 +228,11 @@ with check (bucket_id = 'product-files');
 create policy "product_files_delete"
 on storage.objects for delete to anon
 using (bucket_id = 'product-files');
+
+create policy "development_projects_all"
+on public.product_development_projects for all to anon
+using (true) with check (true);
+
+create policy "development_tasks_all"
+on public.product_development_tasks for all to anon
+using (true) with check (true);

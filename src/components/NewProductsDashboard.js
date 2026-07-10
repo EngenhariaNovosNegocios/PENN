@@ -3,86 +3,94 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
-function LaunchIcon({ name }) {
-  const paths = {
-    spark: <path d="m12 3 1.4 4.6L18 9l-4.6 1.4L12 15l-1.4-4.6L6 9l4.6-1.4ZM19 16l.7 2.3L22 19l-2.3.7L19 22l-.7-2.3L16 19l2.3-.7Z"/>,
-    check: <path d="m5 12 4 4L19 6"/>,
-    arrow: <path d="m9 18 6-6-6-6"/>,
-    clock: <><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></>,
-  };
+const workflowStages = [
+  { key: "discovery", number: "01", title: "Levantamento e oportunidade", area: "Produto & Comercial", color: "blue", tasks: ["Definir solicitante e responsável", "Registrar preço de venda objetivo", "Estimar demanda e clientes potenciais", "Dimensionar mercado potencial", "Consolidar especificações técnicas", "Registrar proposta de valor e diferenciais"] },
+  { key: "viability", number: "02", title: "Viabilidade e aprovações", area: "Comercial & Diretoria", color: "violet", tasks: ["Validar hipótese comercial com MVP", "Executar validação de interesse do mercado", "Realizar análise de procurement", "Avaliar necessidade de certificação", "Validar NCM aplicável", "Analisar benefícios fiscais potenciais", "Calcular margem de contribuição e payback", "Obter aprovação Comercial", "Obter aprovação da Diretoria"] },
+  { key: "samples", number: "03", title: "Amostras e suprimentos", area: "Compras & Engenharia", color: "amber", tasks: ["Definir e adquirir amostras", "Cadastrar matéria-prima necessária", "Validar fornecedor e condições de compra", "Emitir solicitação interna de compra", "Confirmar chegada e entrada fiscal dos materiais"] },
+  { key: "technical", number: "04", title: "Viabilidade técnica", area: "Engenharia", color: "cyan", tasks: ["Planejar desenvolvimento de hardware e firmware", "Realizar análise cosmética e de embalagem", "Executar testes de bancada", "Executar teste de campo ou cliente final", "Comparar capacidade com o datasheet", "Consolidar melhorias e personalizações", "Decidir sobre necessidade de novas amostras"] },
+  { key: "certification", number: "05", title: "Certificações", area: "Qualidade & Engenharia", color: "red", tasks: ["Definir certificações aplicáveis", "Preparar documentação técnica", "Disparar processo de certificação", "Acompanhar ensaios e pendências"] },
+  { key: "design", number: "06", title: "Design e apresentação", area: "Produto & Marketing", color: "pink", tasks: ["Desenvolver identidade e aplicação da marca", "Definir embalagem e proteção do produto", "Desenvolver etiquetas e informações obrigatórias", "Validar apresentação final ao cliente"] },
+  { key: "industrialization", number: "07", title: "Codificação e industrialização", area: "Engenharia de Produtos", color: "indigo", tasks: ["Definir sequência de código interno", "Reservar código e solicitar estrutura", "Vincular matérias-primas, insumos e embalagem", "Realizar análise e liberar avanço", "Registrar condições e preços de compra", "Incluir item na tabela de preços", "Registrar previsão de chegada", "Validar preço final com a Diretoria", "Liberar movimentações e planejamento interno"] },
+  { key: "documentation", number: "08", title: "Documentação do produto", area: "NPI & Engenharia", color: "green", tasks: ["Preencher subsídios de NPI", "Aprovar início da análise documental", "Registrar previsão do NPI", "Validar e aprovar encerramento do NPI", "Preparar inspeção de recebimento", "Preparar especificação de compra", "Publicar datasheet", "Publicar manual do usuário quando aplicável"] },
+  { key: "launch", number: "09", title: "Lançamento e divulgação", area: "Marketing & Vendas", color: "orange", tasks: ["Preparar plano de lançamento", "Notificar internamente o novo produto", "Publicar produto no site", "Divulgar nas redes sociais", "Vincular produto à previsão do vendedor responsável"] },
+  { key: "monitoring", number: "10", title: "Monitoramento pós-lançamento", area: "Produto & Operações", color: "teal", tasks: ["Monitorar primeiras ordens e entregas", "Comparar resultado com demanda esperada", "Acompanhar margem e retorno", "Registrar feedback de clientes", "Manter backlog de documentação e melhorias"] },
+];
+
+const emptyProject = { productCode: "", requester: "", owner: "", targetLaunchDate: "", targetPrice: "", expectedDemand: "", potentialClients: "", marketPotential: "", technicalSpecs: "", developmentReason: "" };
+
+function FlowIcon({ name }) {
+  const paths = { spark: <path d="m12 3 1.4 4.6L18 9l-4.6 1.4L12 15l-1.4-4.6L6 9l4.6-1.4Z"/>, arrow: <path d="m9 18 6-6-6-6"/>, check: <path d="m5 12 4 4L19 6"/>, clock: <><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></>, chevron: <path d="m6 9 6 6 6-6"/>, back: <path d="m15 18-6-6 6-6"/> };
   return <svg aria-hidden="true" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8">{paths[name]}</svg>;
 }
 
 export default function NewProductsDashboard({ onOpenProducts }) {
-  const [raw, setRaw] = useState({ products: [], issues: [], attachments: [], structures: [] });
-  const [filter, setFilter] = useState("all");
-  const [loading, setLoading] = useState(true);
+  const [products, setProducts] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [tasks, setTasks] = useState([]);
+  const [selectedProjectId, setSelectedProjectId] = useState(null);
+  const [expandedStage, setExpandedStage] = useState("discovery");
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState(emptyProject);
+  const [message, setMessage] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    async function loadLaunches() {
-      const [products, issues, attachments, structures] = await Promise.all([
-        supabase.from("products").select("id, code, name, category, owner, status, ncm, characteristics, created_at").order("created_at", { ascending: false }),
-        supabase.from("product_issues").select("id, product_id").is("resolved_at", null),
-        supabase.from("product_attachments").select("id, product_id, kind"),
-        supabase.from("product_structure_items").select("id, product_id"),
-      ]);
-      setRaw({ products: products.data ?? [], issues: issues.data ?? [], attachments: attachments.data ?? [], structures: structures.data ?? [] });
-      setLoading(false);
-    }
-    loadLaunches();
-  }, []);
+  async function loadWorkflow() {
+    const [productsResult, projectsResult, tasksResult] = await Promise.all([
+      supabase.from("products").select("id, code, name, category, owner").order("code"),
+      supabase.from("product_development_projects").select("*").order("created_at", { ascending: false }),
+      supabase.from("product_development_tasks").select("*").order("sort_order"),
+    ]);
+    if (projectsResult.error || tasksResult.error) { setMessage(`Execute o SQL do fluxo de desenvolvimento: ${projectsResult.error?.message ?? tasksResult.error?.message}`); }
+    setProducts(productsResult.data ?? []); setProjects(projectsResult.data ?? []); setTasks(tasksResult.data ?? []);
+  }
 
-  const launches = useMemo(() => raw.products.map((product) => {
-    const hasBase = Boolean(product.ncm && product.owner && product.characteristics);
-    const hasStructure = raw.structures.some((item) => item.product_id === product.id);
-    const hasDocument = raw.attachments.some((item) => item.product_id === product.id && item.kind === "document");
-    const hasPhoto = raw.attachments.some((item) => item.product_id === product.id && item.kind === "photo");
-    const issues = raw.issues.filter((item) => item.product_id === product.id).length;
-    const score = [hasBase, hasStructure, hasDocument, hasPhoto].filter(Boolean).length * 25;
-    const stage = score === 100 && issues === 0 ? "ready" : issues > 0 ? "attention" : score >= 50 ? "validation" : "preparation";
-    return { ...product, hasBase, hasStructure, hasDocument, hasPhoto, issues, score, stage };
-  }), [raw]);
+  useEffect(() => { loadWorkflow(); }, []);
 
-  const visible = launches.filter((item) => filter === "all" || item.stage === filter);
-  const ready = launches.filter((item) => item.stage === "ready").length;
-  const attention = launches.filter((item) => item.stage === "attention").length;
-  const average = launches.length ? Math.round(launches.reduce((sum, item) => sum + item.score, 0) / launches.length) : 0;
+  const projectData = useMemo(() => projects.map((project) => {
+    const product = products.find((item) => item.id === project.product_id);
+    const projectTasks = tasks.filter((task) => task.project_id === project.id);
+    const completed = projectTasks.filter((task) => task.status === "completed" || task.status === "not_applicable").length;
+    const blocked = projectTasks.filter((task) => task.status === "blocked").length;
+    return { ...project, product, projectTasks, completed, blocked, progress: projectTasks.length ? Math.round((completed / projectTasks.length) * 100) : 0 };
+  }), [projects, products, tasks]);
 
-  const stageMeta = {
-    preparation: ["Em preparação", "gray"], validation: ["Em validação", "blue"], attention: ["Com pendências", "red"], ready: ["Pronto para lançar", "green"],
-  };
+  const selectedProject = projectData.find((project) => project.id === selectedProjectId);
+  const average = projectData.length ? Math.round(projectData.reduce((sum, project) => sum + project.progress, 0) / projectData.length) : 0;
+
+  async function createProject(event) {
+    event.preventDefault(); const product = products.find((item) => item.code.toLowerCase() === form.productCode.trim().toLowerCase());
+    if (!product) { setMessage("Selecione um código de produto válido."); return; }
+    if (projects.some((project) => project.product_id === product.id)) { setMessage("Este produto já possui um fluxo de desenvolvimento."); return; }
+    setSaving(true); setMessage("");
+    const { data, error } = await supabase.from("product_development_projects").insert({ product_id: product.id, requester: form.requester.trim(), owner: form.owner.trim(), target_launch_date: form.targetLaunchDate || null, target_price: form.targetPrice ? Number(form.targetPrice) : null, expected_demand: form.expectedDemand.trim(), potential_clients: form.potentialClients.trim(), market_potential: form.marketPotential.trim(), technical_specs: form.technicalSpecs.trim(), development_reason: form.developmentReason.trim() }).select("*").single();
+    if (error) { setMessage(`Não foi possível criar o fluxo: ${error.message}`); setSaving(false); return; }
+    let order = 0; const templateTasks = workflowStages.flatMap((stage) => stage.tasks.map((title) => ({ project_id: data.id, stage_key: stage.key, title, owner_area: stage.area, sort_order: order++ })));
+    const { data: createdTasks, error: taskError } = await supabase.from("product_development_tasks").insert(templateTasks).select("*");
+    if (taskError) { setMessage(`Fluxo criado, mas as tarefas falharam: ${taskError.message}`); } else { setProjects((current) => [data, ...current]); setTasks((current) => [...current, ...(createdTasks ?? [])]); setForm(emptyProject); setShowForm(false); setSelectedProjectId(data.id); setMessage("Fluxo criado com sucesso."); }
+    setSaving(false);
+  }
+
+  async function updateTask(task, status) {
+    const completedAt = status === "completed" ? new Date().toISOString() : null;
+    const { error } = await supabase.from("product_development_tasks").update({ status, completed_at: completedAt }).eq("id", task.id);
+    if (error) { setMessage(`Não foi possível atualizar: ${error.message}`); return; }
+    setTasks((current) => current.map((item) => item.id === task.id ? { ...item, status, completed_at: completedAt } : item));
+  }
+
+  if (selectedProject) return (
+    <main className="flow-page"><button className="flow-back" onClick={() => setSelectedProjectId(null)}><FlowIcon name="back"/> Voltar aos projetos</button>
+      <section className="flow-detail-hero"><div><span>{selectedProject.product?.code}</span><h1>{selectedProject.product?.name}</h1><p>{selectedProject.development_reason || "Fluxo estruturado de desenvolvimento e lançamento."}</p></div><div className="flow-detail-score"><strong>{selectedProject.progress}%</strong><span>concluído</span></div></section>
+      <section className="flow-project-info"><div><span>Solicitante</span><strong>{selectedProject.requester || "Não definido"}</strong></div><div><span>Responsável</span><strong>{selectedProject.owner || "Não definido"}</strong></div><div><span>Lançamento previsto</span><strong>{selectedProject.target_launch_date ? new Date(`${selectedProject.target_launch_date}T12:00:00`).toLocaleDateString("pt-BR") : "Não definido"}</strong></div><div><span>Preço objetivo</span><strong>{selectedProject.target_price ? Number(selectedProject.target_price).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "Não definido"}</strong></div></section>
+      <section className="flow-stage-list">{workflowStages.map((stage) => { const stageTasks = selectedProject.projectTasks.filter((task) => task.stage_key === stage.key); const done = stageTasks.filter((task) => ["completed","not_applicable"].includes(task.status)).length; const open = expandedStage === stage.key; return <article className={`flow-stage ${open ? "open" : ""}`} key={stage.key}><button className="flow-stage-header" onClick={() => setExpandedStage(open ? "" : stage.key)}><span className={`flow-stage-number ${stage.color}`}>{stage.number}</span><div><strong>{stage.title}</strong><small>{stage.area}</small></div><div className="flow-stage-progress"><span>{done}/{stageTasks.length}</span><i><b style={{ width: `${stageTasks.length ? done/stageTasks.length*100 : 0}%` }}/></i></div><FlowIcon name="chevron"/></button>{open && <div className="flow-task-list">{stageTasks.map((task) => <div className={`flow-task ${task.status}`} key={task.id}><button className="flow-task-check" onClick={() => updateTask(task, task.status === "completed" ? "pending" : "completed")}>{task.status === "completed" && <FlowIcon name="check"/>}</button><span>{task.title}</span><select aria-label={`Status de ${task.title}`} value={task.status} onChange={(event) => updateTask(task, event.target.value)}><option value="pending">Pendente</option><option value="in_progress">Em andamento</option><option value="blocked">Bloqueado</option><option value="completed">Concluído</option><option value="not_applicable">Não aplicável</option></select></div>)}</div>}</article>; })}</section>
+    </main>
+  );
 
   return (
-    <main className="launch-page">
-      <section className="launch-hero">
-        <div className="launch-hero-copy"><span><LaunchIcon name="spark" /> Central de lançamentos</span><h1>Novos produtos</h1><p>Acompanhe a evolução de cada produto até que cadastro, estrutura, documentos e imagens estejam prontos para o lançamento.</p><button onClick={onOpenProducts}>Gerenciar produtos <LaunchIcon name="arrow" /></button></div>
-        <div className="launch-radar"><div className="radar-ring r1"/><div className="radar-ring r2"/><div className="radar-ring r3"/><span className="radar-core"><strong>{ready}</strong><small>prontos</small></span><i className="radar-dot d1"/><i className="radar-dot d2"/><i className="radar-dot d3"/></div>
-      </section>
-
-      <section className="launch-summary">
-        <article><span>Portfólio em evolução</span><strong>{loading ? "—" : launches.length}</strong><small>produtos acompanhados</small></article>
-        <article><span>Prontidão média</span><strong>{loading ? "—" : `${average}%`}</strong><div className="mini-progress"><i style={{ width: `${average}%` }}/></div></article>
-        <article className="success"><span>Prontos para lançar</span><strong>{loading ? "—" : ready}</strong><small>sem pendências</small></article>
-        <article className="warning"><span>Precisam de atenção</span><strong>{loading ? "—" : attention}</strong><small>com problemas abertos</small></article>
-      </section>
-
-      <section className="launch-workspace">
-        <header className="launch-toolbar"><div><span className="panel-kicker">Pipeline de prontidão</span><h2>Jornada dos produtos</h2></div><div className="launch-filters">{[["all","Todos"],["preparation","Preparação"],["validation","Validação"],["attention","Pendências"],["ready","Prontos"]].map(([id,label]) => <button className={filter === id ? "active" : ""} key={id} onClick={() => setFilter(id)}>{label}</button>)}</div></header>
-
-        <div className="launch-list">
-          {visible.map((product) => (
-            <article className="launch-card" key={product.id}>
-              <div className="launch-card-top"><span className="launch-monogram">{product.code?.slice(-2) || "NP"}</span><div><strong>{product.name}</strong><small>{product.code} · {product.category || "Sem categoria"}</small></div><span className={`launch-stage ${stageMeta[product.stage][1]}`}>{stageMeta[product.stage][0]}</span></div>
-              <div className="launch-progress"><div><span>Prontidão</span><strong>{product.score}%</strong></div><div><i style={{ width: `${product.score}%` }}/></div></div>
-              <div className="launch-checklist">
-                {[["Cadastro",product.hasBase],["Estrutura",product.hasStructure],["Documentos",product.hasDocument],["Fotos",product.hasPhoto]].map(([label,done]) => <span className={done ? "done" : ""} key={label}><i>{done ? <LaunchIcon name="check" /> : <LaunchIcon name="clock" />}</i>{label}</span>)}
-              </div>
-              <footer><span>{product.owner || "Responsável não definido"}</span>{product.issues > 0 ? <strong className="launch-issues">{product.issues} {product.issues === 1 ? "problema aberto" : "problemas abertos"}</strong> : <strong className="launch-clear">Sem impedimentos</strong>}</footer>
-            </article>
-          ))}
-          {!loading && visible.length === 0 && <div className="launch-empty"><LaunchIcon name="spark"/><strong>Nenhum produto nesta etapa</strong><span>Altere o filtro ou cadastre um novo produto.</span></div>}
-        </div>
-      </section>
+    <main className="flow-page"><section className="flow-hero"><div><span><FlowIcon name="spark"/> Processo PENN</span><h1>Desenvolvimento de novos produtos</h1><p>Da oportunidade ao pós-lançamento: um fluxo único, rastreável e orientado a decisões.</p><div><button onClick={() => setShowForm(true)}>Iniciar novo desenvolvimento</button><button className="secondary" onClick={onOpenProducts}>Abrir catálogo <FlowIcon name="arrow"/></button></div></div><div className="flow-orbit"><strong>{average}%</strong><span>avanço médio</span></div></section>
+      <section className="flow-summary"><article><span>Projetos ativos</span><strong>{projectData.length}</strong></article><article><span>Avanço médio</span><strong>{average}%</strong></article><article><span>Tarefas concluídas</span><strong>{tasks.filter((task) => task.status === "completed").length}</strong></article><article className="blocked"><span>Bloqueios</span><strong>{tasks.filter((task) => task.status === "blocked").length}</strong></article></section>
+      {message && <p className="flow-message">{message}</p>}
+      {showForm && <section className="flow-create"><header><div><span className="panel-kicker">Novo fluxo</span><h2>Dados estratégicos do projeto</h2></div><button onClick={() => setShowForm(false)}>Fechar</button></header><form onSubmit={createProject}><label>Código do produto<input list="flow-products" required value={form.productCode} onChange={(e) => setForm({...form,productCode:e.target.value})}/><datalist id="flow-products">{products.map((p)=><option key={p.id} value={p.code}>{p.name}</option>)}</datalist></label><label>Solicitante<input required value={form.requester} onChange={(e)=>setForm({...form,requester:e.target.value})}/></label><label>Responsável<input required value={form.owner} onChange={(e)=>setForm({...form,owner:e.target.value})}/></label><label>Lançamento previsto<input type="date" value={form.targetLaunchDate} onChange={(e)=>setForm({...form,targetLaunchDate:e.target.value})}/></label><label>Preço objetivo<input min="0" step="0.01" type="number" value={form.targetPrice} onChange={(e)=>setForm({...form,targetPrice:e.target.value})}/></label><label>Demanda esperada<input value={form.expectedDemand} onChange={(e)=>setForm({...form,expectedDemand:e.target.value})}/></label><label className="wide">Clientes potenciais<textarea rows="2" value={form.potentialClients} onChange={(e)=>setForm({...form,potentialClients:e.target.value})}/></label><label className="wide">Mercado potencial<textarea rows="2" value={form.marketPotential} onChange={(e)=>setForm({...form,marketPotential:e.target.value})}/></label><label className="wide">Especificações técnicas<textarea rows="3" value={form.technicalSpecs} onChange={(e)=>setForm({...form,technicalSpecs:e.target.value})}/></label><label className="wide">Por que desenvolver este produto? Qual o diferencial?<textarea required rows="3" value={form.developmentReason} onChange={(e)=>setForm({...form,developmentReason:e.target.value})}/></label><div className="flow-form-action"><button disabled={saving}>{saving ? "Criando fluxo..." : "Criar projeto e checklist"}</button></div></form></section>}
+      <section className="flow-projects"><header><div><span className="panel-kicker">Portfólio em desenvolvimento</span><h2>Projetos e evolução</h2></div><span>{projectData.length} projetos</span></header><div>{projectData.map((project)=><button className="flow-project-card" key={project.id} onClick={()=>setSelectedProjectId(project.id)}><span className="flow-project-code">{project.product?.code?.slice(-2)||"NP"}</span><div><strong>{project.product?.name}</strong><small>{project.product?.code} · {project.owner||"Sem responsável"}</small></div><span className="flow-project-meter"><i><b style={{width:`${project.progress}%`}}/></i><strong>{project.progress}%</strong></span>{project.blocked>0&&<span className="flow-blocked">{project.blocked} bloqueios</span>}<FlowIcon name="arrow"/></button>)}{projectData.length===0&&<div className="flow-empty"><FlowIcon name="spark"/><strong>Nenhum desenvolvimento iniciado</strong><span>Crie o primeiro fluxo para transformar a lista antiga em um processo vivo.</span></div>}</div></section>
     </main>
   );
 }
