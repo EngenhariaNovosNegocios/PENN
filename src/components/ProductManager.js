@@ -77,6 +77,17 @@ const structureColumns =
 const issueColumns =
   "id, product_id, product_code, description, created_at";
 
+const attachmentColumns =
+  "id, product_id, name, file_type, kind, storage_path, public_url, created_at";
+
+const documentTypes = [
+  "Inspeção de recebimento",
+  "Especificação de compra",
+  "Datasheet",
+  "Manual do usuário",
+  "NPI",
+];
+
 const ncmTaxColumns =
   "id, ncm, description, ipi_rate, pis_rate, cofins_rate, icms_rate, import_tax_rate, updated_at";
 
@@ -86,6 +97,8 @@ const tabs = [
   { id: "structure", label: "Estrutura", icon: "structure" },
   { id: "issues", label: "Problemas", icon: "issues" },
   { id: "fiscal", label: "Fiscal", icon: "fiscal" },
+  { id: "documents", label: "Documentos", icon: "documents" },
+  { id: "photos", label: "Fotos", icon: "photos" },
 ];
 
 function ActionIcon({ name }) {
@@ -95,6 +108,9 @@ function ActionIcon({ name }) {
     structure: <><path d="M12 3v6M6 21v-5h12v5M6 16v-3h12v3"/><circle cx="12" cy="10" r="2"/></>,
     issues: <><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.7 2.6 18a2 2 0 0 0 1.8 3h15.2a2 2 0 0 0 1.8-3L13.7 3.7a2 2 0 0 0-3.4 0Z"/></>,
     fiscal: <><path d="M6 2h9l4 4v16H6Z"/><path d="M14 2v5h5M9 12h7M9 16h7"/></>,
+    documents: <><path d="M7 2h8l4 4v16H7Z"/><path d="M14 2v5h5M10 12h6M10 16h6"/></>,
+    photos: <><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 15-5-5L5 20"/></>,
+    download: <><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></>,
     plus: <path d="M12 5v14M5 12h14"/>,
     trash: <><path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6"/></>,
   };
@@ -115,6 +131,7 @@ export default function ProductManager() {
   const [products, setProducts] = useState([]);
   const [structureItems, setStructureItems] = useState([]);
   const [issues, setIssues] = useState([]);
+  const [attachments, setAttachments] = useState([]);
   const [ncmTaxes, setNcmTaxes] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [editForm, setEditForm] = useState(emptyForm);
@@ -130,6 +147,10 @@ export default function ProductManager() {
   const [isDeletingProduct, setIsDeletingProduct] = useState(false);
   const [isAddingStructure, setIsAddingStructure] = useState(false);
   const [isAddingIssue, setIsAddingIssue] = useState(false);
+  const [documentType, setDocumentType] = useState(documentTypes[0]);
+  const [documentFile, setDocumentFile] = useState(null);
+  const [photoFile, setPhotoFile] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
@@ -198,10 +219,11 @@ export default function ProductManager() {
     if (productIds.length === 0) {
       setStructureItems([]);
       setIssues([]);
-      return { issues: [], structureItems: [] };
+      setAttachments([]);
+      return { issues: [], structureItems: [], attachments: [] };
     }
 
-    const [structureResult, issuesResult] = await Promise.all([
+    const [structureResult, issuesResult, attachmentsResult] = await Promise.all([
       supabase
         .from("product_structure_items")
         .select(structureColumns)
@@ -212,16 +234,23 @@ export default function ProductManager() {
         .select(issueColumns)
         .in("product_id", productIds)
         .order("created_at", { ascending: false }),
+      supabase
+        .from("product_attachments")
+        .select(attachmentColumns)
+        .in("product_id", productIds)
+        .order("created_at", { ascending: false }),
     ]);
 
     const nextStructureItems = structureResult.error
       ? []
       : structureResult.data ?? [];
     const nextIssues = issuesResult.error ? [] : issuesResult.data ?? [];
+    const nextAttachments = attachmentsResult.error ? [] : attachmentsResult.data ?? [];
 
     setStructureItems(nextStructureItems);
     setIssues(nextIssues);
-    return { issues: nextIssues, structureItems: nextStructureItems };
+    setAttachments(nextAttachments);
+    return { issues: nextIssues, structureItems: nextStructureItems, attachments: nextAttachments };
   }
 
   async function loadNcmTaxes() {
@@ -246,6 +275,16 @@ export default function ProductManager() {
   const selectedIssues = useMemo(
     () => issues.filter((issue) => issue.product_id === selectedProduct?.id),
     [issues, selectedProduct]
+  );
+
+  const selectedDocuments = useMemo(
+    () => attachments.filter((item) => item.product_id === selectedProduct?.id && item.kind === "document"),
+    [attachments, selectedProduct]
+  );
+
+  const selectedPhotos = useMemo(
+    () => attachments.filter((item) => item.product_id === selectedProduct?.id && item.kind === "photo"),
+    [attachments, selectedProduct]
   );
 
   const selectedNcmTax = useMemo(() => {
@@ -452,6 +491,13 @@ export default function ProductManager() {
       return;
     }
 
+    const productFilePaths = attachments
+      .filter((item) => item.product_id === selectedProduct.id)
+      .map((item) => item.storage_path);
+    if (productFilePaths.length > 0) {
+      await supabase.storage.from("product-files").remove(productFilePaths);
+    }
+
     const remainingProducts = products.filter(
       (product) => product.id !== selectedProduct.id
     );
@@ -462,6 +508,9 @@ export default function ProductManager() {
     );
     setIssues((current) =>
       current.filter((issue) => issue.product_id !== selectedProduct.id)
+    );
+    setAttachments((current) =>
+      current.filter((item) => item.product_id !== selectedProduct.id)
     );
     setSelectedId(remainingProducts[0]?.id ?? null);
     setActiveTab("overview");
@@ -608,6 +657,76 @@ export default function ProductManager() {
     showSuccess("Problema resolvido.");
   }
 
+  async function uploadAttachment(event, kind) {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    const file = kind === "photo" ? photoFile : documentFile;
+
+    if (!selectedProduct || !file) {
+      setErrorMessage("Selecione um arquivo antes de enviar.");
+      return;
+    }
+
+    if (kind === "photo" && !file.type.startsWith("image/")) {
+      setErrorMessage("A galeria aceita apenas arquivos de imagem.");
+      return;
+    }
+
+    setIsUploading(true);
+    setErrorMessage("");
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
+    const storagePath = `${selectedProduct.id}/${crypto.randomUUID()}-${safeName}`;
+    const { error: storageError } = await supabase.storage
+      .from("product-files")
+      .upload(storagePath, file, { contentType: file.type, upsert: false });
+
+    if (storageError) {
+      setErrorMessage(`Nao foi possivel enviar o arquivo: ${storageError.message}`);
+      setIsUploading(false);
+      return;
+    }
+
+    const { data: urlData } = supabase.storage.from("product-files").getPublicUrl(storagePath);
+    const { data, error } = await supabase
+      .from("product_attachments")
+      .insert({
+        product_id: selectedProduct.id,
+        name: file.name,
+        file_type: kind === "photo" ? "Foto do produto" : documentType,
+        kind,
+        storage_path: storagePath,
+        public_url: urlData.publicUrl,
+      })
+      .select(attachmentColumns)
+      .single();
+
+    if (error) {
+      await supabase.storage.from("product-files").remove([storagePath]);
+      setErrorMessage(`Nao foi possivel registrar o arquivo: ${error.message}`);
+      setIsUploading(false);
+      return;
+    }
+
+    setAttachments((current) => [data, ...current]);
+    kind === "photo" ? setPhotoFile(null) : setDocumentFile(null);
+    formElement.reset();
+    setIsUploading(false);
+    showSuccess(kind === "photo" ? "Foto adicionada." : "Documento anexado.");
+  }
+
+  async function deleteAttachment(attachment) {
+    if (!window.confirm(`Excluir ${attachment.name}?`)) return;
+    setErrorMessage("");
+    const { error } = await supabase.from("product_attachments").delete().eq("id", attachment.id);
+    if (error) {
+      setErrorMessage(`Nao foi possivel excluir o arquivo: ${error.message}`);
+      return;
+    }
+    await supabase.storage.from("product-files").remove([attachment.storage_path]);
+    setAttachments((current) => current.filter((item) => item.id !== attachment.id));
+    showSuccess("Arquivo excluido.");
+  }
+
   return (
     <main className="workspace">
       <header className="page-header">
@@ -681,6 +800,9 @@ export default function ProductManager() {
                 ? "Carregando"
                 : `${filteredProducts.length} de ${products.length}`}
             </span>
+            <span className="issue-overview">
+              <strong>{issues.length}</strong> problemas abertos
+            </span>
           </div>
 
           <div className="list-controls">
@@ -705,7 +827,14 @@ export default function ProductManager() {
                   type="button"
                 >
                   <strong>{product.code}</strong>
-                  <span aria-hidden="true">→</span>
+                  <span className="code-row-meta">
+                    {issues.filter((issue) => issue.product_id === product.id).length > 0 && (
+                      <span className="issue-count" title="Problemas abertos">
+                        {issues.filter((issue) => issue.product_id === product.id).length}
+                      </span>
+                    )}
+                    <span aria-hidden="true">→</span>
+                  </span>
                 </button>
               ))}
 
@@ -1050,6 +1179,53 @@ export default function ProductManager() {
                         Supabase.
                       </p>
                     )}
+                  </div>
+                </section>
+              )}
+
+              {activeTab === "documents" && (
+                <section className="tab-panel" aria-label="Documentos do produto">
+                  <form className="attachment-form" onSubmit={(event) => uploadAttachment(event, "document")}>
+                    <label>Tipo de documento
+                      <select value={documentType} onChange={(event) => setDocumentType(event.target.value)}>
+                        {documentTypes.map((type) => <option key={type} value={type}>{type}</option>)}
+                      </select>
+                    </label>
+                    <label>Arquivo
+                      <input required type="file" onChange={(event) => setDocumentFile(event.target.files?.[0] ?? null)} />
+                    </label>
+                    <button disabled={isUploading} type="submit"><ActionIcon name="plus" />{isUploading ? "Enviando..." : "Anexar arquivo"}</button>
+                  </form>
+                  <div className="attachment-list">
+                    {selectedDocuments.map((item) => (
+                      <article className="attachment-row" key={item.id}>
+                        <span className="file-symbol"><ActionIcon name="documents" /></span>
+                        <span><strong>{item.name}</strong><small>{item.file_type}</small></span>
+                        <a href={item.public_url} rel="noreferrer" target="_blank"><ActionIcon name="download" />Abrir</a>
+                        <button className="attachment-delete" onClick={() => deleteAttachment(item)} type="button"><ActionIcon name="trash" />Excluir</button>
+                      </article>
+                    ))}
+                    {selectedDocuments.length === 0 && <p className="empty-state">Nenhum documento anexado.</p>}
+                  </div>
+                </section>
+              )}
+
+              {activeTab === "photos" && (
+                <section className="tab-panel" aria-label="Fotos do produto">
+                  <form className="attachment-form photo-upload" onSubmit={(event) => uploadAttachment(event, "photo")}>
+                    <label>Foto do produto
+                      <input accept="image/*" required type="file" onChange={(event) => setPhotoFile(event.target.files?.[0] ?? null)} />
+                    </label>
+                    <button disabled={isUploading} type="submit"><ActionIcon name="plus" />{isUploading ? "Enviando..." : "Adicionar foto"}</button>
+                  </form>
+                  <div className="photo-grid">
+                    {selectedPhotos.map((item) => (
+                      <article className="photo-card" key={item.id}>
+                        <a href={item.public_url} rel="noreferrer" target="_blank"><img alt={item.name} src={item.public_url} /></a>
+                        <div><span title={item.name}>{item.name}</span><button aria-label={`Excluir ${item.name}`} onClick={() => deleteAttachment(item)} type="button"><ActionIcon name="trash" /></button></div>
+                      </article>
+                    ))}
+                    {selectedPhotos.length === 0 && <p className="empty-state">Nenhuma foto adicionada.</p>}
                   </div>
                 </section>
               )}
