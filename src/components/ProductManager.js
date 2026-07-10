@@ -29,12 +29,6 @@ const initialProducts = [
     code: "PENN-001",
     category: "Produto tecnico",
     ncm: "8412.21.10",
-    sap_material_code: "PENN-001",
-    sap_plant: "1000",
-    sap_unit: "UN",
-    sap_material_group: "HID",
-    sync_source: "manual",
-    last_sync_at: null,
     owner: "Engenharia",
     status: "ativo",
     characteristics: "Conjunto sob demanda com componentes dimensionados por aplicacao.",
@@ -46,12 +40,6 @@ const initialProducts = [
     code: "PENN-002",
     category: "Sistema montado",
     ncm: "8537.10.90",
-    sap_material_code: "PENN-002",
-    sap_plant: "1000",
-    sap_unit: "UN",
-    sap_material_group: "ELE",
-    sync_source: "manual",
-    last_sync_at: null,
     owner: "Novos Negocios",
     status: "manutencao",
     characteristics: "Produto com configuracao eletrica variavel conforme requisito do cliente.",
@@ -64,11 +52,6 @@ const emptyForm = {
   code: "",
   category: "",
   ncm: "",
-  sap_material_code: "",
-  sap_plant: "",
-  sap_unit: "",
-  sap_material_group: "",
-  sync_source: "manual",
   owner: "",
   status: "ativo",
   characteristics: "",
@@ -86,7 +69,7 @@ const emptyIssueForm = {
 };
 
 const productColumns =
-  "id, name, code, category, ncm, sap_material_code, sap_plant, sap_unit, sap_material_group, sync_source, last_sync_at, owner, status, characteristics, structure, created_at";
+  "id, name, code, category, ncm, owner, status, characteristics, structure, created_at";
 
 const structureColumns =
   "id, product_id, material_code, description, quantity, created_at";
@@ -100,7 +83,6 @@ const ncmTaxColumns =
 const tabs = [
   { id: "overview", label: "Resumo" },
   { id: "edit", label: "Editar" },
-  { id: "sap", label: "SAP" },
   { id: "structure", label: "Estrutura" },
   { id: "issues", label: "Problemas" },
   { id: "fiscal", label: "Fiscal" },
@@ -194,11 +176,6 @@ export default function ProductManager() {
       code: selectedProduct.code ?? "",
       category: selectedProduct.category ?? "",
       ncm: selectedProduct.ncm ?? "",
-      sap_material_code: selectedProduct.sap_material_code ?? "",
-      sap_plant: selectedProduct.sap_plant ?? "",
-      sap_unit: selectedProduct.sap_unit ?? "",
-      sap_material_group: selectedProduct.sap_material_group ?? "",
-      sync_source: selectedProduct.sync_source ?? "manual",
       owner: selectedProduct.owner ?? "",
       status: selectedProduct.status ?? "ativo",
       characteristics: selectedProduct.characteristics ?? "",
@@ -283,9 +260,6 @@ export default function ProductManager() {
         product.category,
         product.owner,
         product.ncm,
-        product.sap_material_code,
-        product.sap_plant,
-        product.sap_material_group,
       ]
         .filter(Boolean)
         .join(" ")
@@ -368,11 +342,6 @@ export default function ProductManager() {
       code: form.code.trim(),
       category: form.category.trim(),
       ncm: form.ncm.trim(),
-      sap_material_code: form.sap_material_code.trim(),
-      sap_plant: form.sap_plant.trim(),
-      sap_unit: form.sap_unit.trim(),
-      sap_material_group: form.sap_material_group.trim(),
-      sync_source: form.sync_source,
       owner: form.owner.trim(),
       characteristics: form.characteristics.trim(),
     };
@@ -420,11 +389,6 @@ export default function ProductManager() {
       code: editForm.code.trim(),
       category: editForm.category.trim(),
       ncm: editForm.ncm.trim(),
-      sap_material_code: editForm.sap_material_code.trim(),
-      sap_plant: editForm.sap_plant.trim(),
-      sap_unit: editForm.sap_unit.trim(),
-      sap_material_group: editForm.sap_material_group.trim(),
-      sync_source: editForm.sync_source,
       owner: editForm.owner.trim(),
       characteristics: editForm.characteristics.trim(),
     };
@@ -745,7 +709,7 @@ export default function ProductManager() {
           <div className="list-controls">
             <input
               onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Buscar por nome, codigo, SAP, NCM..."
+              placeholder="Buscar por nome, codigo ou NCM..."
               type="search"
               value={searchTerm}
             />
@@ -818,12 +782,12 @@ export default function ProductManager() {
                       selectedProduct.status}
                   </span>
                   <button
-                    className="danger-button"
+                    className="delete-product-button"
                     disabled={isDeletingProduct}
                     onClick={deleteSelectedProduct}
                     type="button"
                   >
-                    {isDeletingProduct ? "Excluindo..." : "Excluir produto"}
+                    {isDeletingProduct ? "Excluindo..." : "Excluir"}
                   </button>
                 </div>
               </div>
@@ -832,11 +796,13 @@ export default function ProductManager() {
                 {tabs.map((tab) => (
                   <button
                     className={activeTab === tab.id ? "active" : ""}
+                    aria-selected={activeTab === tab.id}
                     key={tab.id}
                     onClick={() => openTab(tab.id)}
                     type="button"
                   >
-                    {tab.label}
+                    <span className="tab-marker" />
+                    <span>{tab.label}</span>
                   </button>
                 ))}
               </div>
@@ -851,12 +817,6 @@ export default function ProductManager() {
                     <div>
                       <dt>NCM</dt>
                       <dd>{selectedProduct.ncm || "Nao informado"}</dd>
-                    </div>
-                    <div>
-                      <dt>Codigo SAP</dt>
-                      <dd>
-                        {selectedProduct.sap_material_code || "Nao vinculado"}
-                      </dd>
                     </div>
                     <div>
                       <dt>Responsavel</dt>
@@ -935,61 +895,12 @@ export default function ProductManager() {
                     </label>
 
                     <label>
-                      Codigo SAP
-                      <input
-                        name="sap_material_code"
-                        onChange={updateEditField}
-                        value={editForm.sap_material_code}
-                      />
-                    </label>
-
-                    <label>
-                      Centro SAP
-                      <input
-                        name="sap_plant"
-                        onChange={updateEditField}
-                        value={editForm.sap_plant}
-                      />
-                    </label>
-
-                    <label>
-                      Unidade
-                      <input
-                        name="sap_unit"
-                        onChange={updateEditField}
-                        value={editForm.sap_unit}
-                      />
-                    </label>
-
-                    <label>
-                      Grupo mercadorias
-                      <input
-                        name="sap_material_group"
-                        onChange={updateEditField}
-                        value={editForm.sap_material_group}
-                      />
-                    </label>
-
-                    <label>
                       Responsavel
                       <input
                         name="owner"
                         onChange={updateEditField}
                         value={editForm.owner}
                       />
-                    </label>
-
-                    <label>
-                      Origem
-                      <select
-                        name="sync_source"
-                        onChange={updateEditField}
-                        value={editForm.sync_source}
-                      >
-                        <option value="manual">Manual</option>
-                        <option value="sap">SAP</option>
-                        <option value="importacao">Importacao</option>
-                      </select>
                     </label>
 
                     <label className="wide-field">
@@ -1008,57 +919,6 @@ export default function ProductManager() {
                       </button>
                     </div>
                   </form>
-                </section>
-              )}
-
-              {activeTab === "sap" && (
-                <section className="tab-panel" aria-label="Dados SAP">
-                  <dl className="detail-grid sap-grid">
-                    <div>
-                      <dt>Codigo material SAP</dt>
-                      <dd>
-                        {selectedProduct.sap_material_code || "Nao vinculado"}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Centro</dt>
-                      <dd>{selectedProduct.sap_plant || "Nao informado"}</dd>
-                    </div>
-                    <div>
-                      <dt>Unidade</dt>
-                      <dd>{selectedProduct.sap_unit || "Nao informado"}</dd>
-                    </div>
-                    <div>
-                      <dt>Grupo mercadorias</dt>
-                      <dd>
-                        {selectedProduct.sap_material_group || "Nao informado"}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Origem dos dados</dt>
-                      <dd>{selectedProduct.sync_source || "manual"}</dd>
-                    </div>
-                    <div>
-                      <dt>Ultima sincronizacao</dt>
-                      <dd>
-                        {selectedProduct.last_sync_at
-                          ? new Date(
-                              selectedProduct.last_sync_at
-                            ).toLocaleString("pt-BR")
-                          : "Nunca sincronizado"}
-                      </dd>
-                    </div>
-                  </dl>
-
-                  <div className="text-block">
-                    <h3>Orientacao de integracao</h3>
-                    <p>
-                      Use o SAP como fonte mestre para codigo material, centro,
-                      unidade, grupo de mercadorias, NCM e estrutura oficial.
-                      Este app pode manter problemas e acompanhamentos internos
-                      sem sobrescrever o cadastro mestre do ERP.
-                    </p>
-                  </div>
                 </section>
               )}
 
@@ -1300,46 +1160,6 @@ export default function ProductManager() {
           </label>
 
           <label>
-            Codigo SAP
-            <input
-              name="sap_material_code"
-              onChange={updateField}
-              placeholder="Ex.: 0000001234"
-              value={form.sap_material_code}
-            />
-          </label>
-
-          <label>
-            Centro SAP
-            <input
-              name="sap_plant"
-              onChange={updateField}
-              placeholder="Ex.: 1000"
-              value={form.sap_plant}
-            />
-          </label>
-
-          <label>
-            Unidade
-            <input
-              name="sap_unit"
-              onChange={updateField}
-              placeholder="Ex.: UN"
-              value={form.sap_unit}
-            />
-          </label>
-
-          <label>
-            Grupo mercadorias
-            <input
-              name="sap_material_group"
-              onChange={updateField}
-              placeholder="Ex.: ELE"
-              value={form.sap_material_group}
-            />
-          </label>
-
-          <label>
             Responsavel
             <input
               name="owner"
@@ -1357,19 +1177,6 @@ export default function ProductManager() {
                   {option.label}
                 </option>
               ))}
-            </select>
-          </label>
-
-          <label>
-            Origem
-            <select
-              name="sync_source"
-              onChange={updateField}
-              value={form.sync_source}
-            >
-              <option value="manual">Manual</option>
-              <option value="sap">SAP</option>
-              <option value="importacao">Importacao</option>
             </select>
           </label>
 

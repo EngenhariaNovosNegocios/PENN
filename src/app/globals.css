@@ -458,30 +458,48 @@ button {
 }
 
 .detail-tabs {
-  display: flex;
-  gap: 8px;
-  background: var(--panel-soft);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(110px, 1fr));
+  gap: 9px;
   margin-bottom: 20px;
-  padding: 6px;
 }
 
 .detail-tabs button {
-  min-height: 40px;
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 48px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #ffffff;
   color: var(--muted);
   font-weight: 700;
-  padding: 0 14px;
+  padding: 0 12px;
+  text-align: left;
+  transition: border-color .18s ease, box-shadow .18s ease, color .18s ease;
+}
+
+.detail-tabs button:hover {
+  border-color: #afc2df;
+  color: var(--primary);
+}
+
+.tab-marker {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border: 2px solid #a9b5c3;
+  border-radius: 50%;
 }
 
 .detail-tabs button.active {
-  background: #ffffff;
-  box-shadow: 0 4px 12px rgba(23, 33, 43, 0.08);
+  border-color: #9eb9e2;
+  background: #f7faff;
+  box-shadow: 0 4px 12px rgba(36, 84, 166, 0.08);
   color: var(--primary);
 }
+
+.detail-tabs button.active .tab-marker { border-color: var(--primary); background: var(--primary); box-shadow: 0 0 0 3px var(--blue-bg); }
 
 .tab-panel {
   display: grid;
@@ -537,7 +555,6 @@ button {
   opacity: 0.65;
 }
 
-.danger-button,
 .ghost-danger-button {
   min-height: 38px;
   border-radius: 8px;
@@ -545,11 +562,9 @@ button {
   padding: 0 12px;
 }
 
-.danger-button {
-  border: 1px solid var(--danger);
-  background: var(--danger);
-  color: #ffffff;
-}
+
+.delete-product-button { min-height: 30px; padding: 0 9px; border: 1px solid #e1e5ea; border-radius: 7px; color: #7b8794; background: #fff; font-size: .72rem; font-weight: 600; }
+.delete-product-button:hover { border-color: #e5bbb6; color: var(--danger); background: #fffafa; }
 
 .ghost-danger-button {
   border: 1px solid #ffc9c0;
@@ -557,7 +572,7 @@ button {
   color: var(--danger);
 }
 
-.danger-button:disabled {
+.delete-product-button:disabled {
   cursor: not-allowed;
   opacity: 0.65;
 }
@@ -759,7 +774,7 @@ button {
   }
 
   .detail-tabs {
-    overflow-x: auto;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .data-row,

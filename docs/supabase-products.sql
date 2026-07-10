@@ -1,23 +1,13 @@
 alter table public.products
 add column if not exists ncm text;
 
-alter table public.products
-add column if not exists sap_material_code text;
-
-alter table public.products
-add column if not exists sap_plant text;
-
-alter table public.products
-add column if not exists sap_unit text;
-
-alter table public.products
-add column if not exists sap_material_group text;
-
-alter table public.products
-add column if not exists sync_source text not null default 'manual';
-
-alter table public.products
-add column if not exists last_sync_at timestamptz;
+-- O cadastro passa a ser mantido manualmente, sem campos de integracao SAP.
+alter table public.products drop column if exists sap_material_code;
+alter table public.products drop column if exists sap_plant;
+alter table public.products drop column if exists sap_unit;
+alter table public.products drop column if exists sap_material_group;
+alter table public.products drop column if exists sync_source;
+alter table public.products drop column if exists last_sync_at;
 
 create table if not exists public.ncm_taxes (
   id bigint primary key generated always as identity,
