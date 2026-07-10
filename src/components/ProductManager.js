@@ -63,11 +63,6 @@ const emptyStructureForm = {
   quantity: "",
 };
 
-const emptyIssueForm = {
-  productCode: "",
-  description: "",
-};
-
 const productColumns =
   "id, name, code, category, ncm, owner, status, characteristics, structure, created_at";
 
@@ -75,7 +70,7 @@ const structureColumns =
   "id, product_id, material_code, description, quantity, created_at";
 
 const issueColumns =
-  "id, product_id, product_code, description, resolution_note, resolved_at, created_at";
+  "id, product_id, product_code, description, priority, due_date, resolution_note, resolved_at, created_at";
 
 const attachmentColumns =
   "id, product_id, name, file_type, kind, storage_path, public_url, created_at";
@@ -136,7 +131,6 @@ export default function ProductManager() {
   const [form, setForm] = useState(emptyForm);
   const [editForm, setEditForm] = useState(emptyForm);
   const [structureForm, setStructureForm] = useState(emptyStructureForm);
-  const [issueForm, setIssueForm] = useState(emptyIssueForm);
   const [selectedId, setSelectedId] = useState(null);
   const [activeTab, setActiveTab] = useState("overview");
   const [viewMode, setViewMode] = useState("catalog");
@@ -146,7 +140,6 @@ export default function ProductManager() {
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [isDeletingProduct, setIsDeletingProduct] = useState(false);
   const [isAddingStructure, setIsAddingStructure] = useState(false);
-  const [isAddingIssue, setIsAddingIssue] = useState(false);
   const [resolvingIssueId, setResolvingIssueId] = useState(null);
   const [resolutionNotes, setResolutionNotes] = useState({});
   const [documentType, setDocumentType] = useState(documentTypes[0]);
@@ -317,13 +310,6 @@ export default function ProductManager() {
 
   function openTab(tabId) {
     setActiveTab(tabId);
-
-    if (tabId === "issues" && selectedProduct && !issueForm.productCode) {
-      setIssueForm((current) => ({
-        ...current,
-        productCode: selectedProduct.code,
-      }));
-    }
   }
 
   function updateFormField(setter) {
@@ -336,7 +322,6 @@ export default function ProductManager() {
   const updateField = updateFormField(setForm);
   const updateEditField = updateFormField(setEditForm);
   const updateStructureField = updateFormField(setStructureForm);
-  const updateIssueField = updateFormField(setIssueForm);
 
   function updateProductStatus(productId, status) {
     setProducts((current) =>
@@ -585,50 +570,6 @@ export default function ProductManager() {
       current.filter((structureItem) => structureItem.id !== itemId)
     );
     showSuccess("Item removido da estrutura.");
-  }
-
-  async function addIssue(event) {
-    event.preventDefault();
-
-    const productCode = issueForm.productCode.trim();
-    const description = issueForm.description.trim();
-    const issueProduct = products.find(
-      (product) => product.code.toLowerCase() === productCode.toLowerCase()
-    );
-
-    if (!issueProduct || !description) {
-      setErrorMessage(
-        "Informe um codigo de produto cadastrado e a descricao do problema."
-      );
-      return;
-    }
-
-    setIsAddingIssue(true);
-    setErrorMessage("");
-
-    const { data, error } = await supabase
-      .from("product_issues")
-      .insert({
-        product_id: issueProduct.id,
-        product_code: issueProduct.code,
-        description,
-      })
-      .select(issueColumns)
-      .single();
-
-    if (error) {
-      setErrorMessage(`Nao foi possivel registrar o problema: ${error.message}`);
-      setIsAddingIssue(false);
-      return;
-    }
-
-    setIssues((current) => [data, ...current]);
-    setSelectedId(issueProduct.id);
-    setActiveTab("issues");
-    setIssueForm({ productCode: issueProduct.code, description: "" });
-    await saveProductStatus(issueProduct.id, "manutencao");
-    setIsAddingIssue(false);
-    showSuccess("Problema registrado.");
   }
 
   async function resolveIssue(issue) {
@@ -1094,32 +1035,6 @@ export default function ProductManager() {
 
               {activeTab === "issues" && (
                 <section className="tab-panel" aria-label="Problemas do produto">
-                  <form className="compact-form issue-form" onSubmit={addIssue}>
-                    <label>
-                      Codigo do produto
-                      <input
-                        name="productCode"
-                        onChange={updateIssueField}
-                        placeholder={selectedProduct.code}
-                        required
-                        value={issueForm.productCode}
-                      />
-                    </label>
-                    <label>
-                      Problema
-                      <input
-                        name="description"
-                        onChange={updateIssueField}
-                        placeholder="Descreva o problema encontrado"
-                        required
-                        value={issueForm.description}
-                      />
-                    </label>
-                    <button disabled={isAddingIssue} type="submit">
-                      {isAddingIssue ? "Registrando..." : "Registrar"}
-                    </button>
-                  </form>
-
                   <div className="data-list">
                     {selectedIssues.map((issue) => {
                       const resolutionNote = resolutionNotes[issue.id] ?? "";

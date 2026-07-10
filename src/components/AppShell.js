@@ -3,12 +3,14 @@
 import { useState } from "react";
 import OverviewDashboard from "@/components/OverviewDashboard";
 import NewProductsDashboard from "@/components/NewProductsDashboard";
+import IssuesDashboard from "@/components/IssuesDashboard";
 
 const Icon = ({ name }) => {
   const paths = {
     grid: <><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></>,
     box: <><path d="m21 8-9 5-9-5"/><path d="M3 8l9-5 9 5v8l-9 5-9-5Z"/><path d="M12 13v8"/></>,
     spark: <><path d="m12 3 1.4 4.6L18 9l-4.6 1.4L12 15l-1.4-4.6L6 9l4.6-1.4Z"/><path d="M19 16v6M16 19h6"/></>,
+    alert: <><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.7 2.6 18a2 2 0 0 0 1.8 3h15.2a2 2 0 0 0 1.8-3L13.7 3.7a2 2 0 0 0-3.4 0Z"/></>,
     chart: <><path d="M4 19V9"/><path d="M10 19V5"/><path d="M16 19v-7"/><path d="M22 19H2"/></>,
     file: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h6"/></>,
     settings: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></>,
@@ -22,6 +24,7 @@ const navigation = [
   { id: "overview", label: "Visão geral", icon: "grid" },
   { id: "products", label: "Produtos", icon: "box" },
   { id: "new-products", label: "Novos produtos", icon: "spark" },
+  { id: "issues", label: "Problemas", icon: "alert" },
   { label: "Indicadores", icon: "chart", disabled: true },
   { label: "Relatórios", icon: "file", disabled: true },
 ];
@@ -39,8 +42,8 @@ export default function AppShell({ children }) {
       </aside>
       {menuOpen && <button className="sidebar-backdrop" onClick={() => setMenuOpen(false)} aria-label="Fechar menu"/>}
       <section className="app-stage">
-        <header className="topbar"><button className="menu-trigger desktop" onClick={() => setCollapsed(!collapsed)} aria-label={collapsed ? "Expandir menu" : "Recolher menu"}><Icon name="menu"/></button><button className="menu-trigger mobile" onClick={() => setMenuOpen(true)} aria-label="Abrir menu"><Icon name="menu"/></button><div className="breadcrumb"><span>Portal PENN</span><b>/</b><strong>{{ overview: "Visão geral", products: "Produtos", "new-products": "Novos produtos" }[activePage]}</strong></div><div className="topbar-actions"><span className="environment"><i/> Ambiente interno</span><button className="notification" aria-label="Notificações">●</button></div></header>
-        <div className="main-content">{activePage === "overview" ? <OverviewDashboard onOpenProducts={() => setActivePage("products")} /> : activePage === "new-products" ? <NewProductsDashboard onOpenProducts={() => setActivePage("products")} /> : children}</div>
+        <header className="topbar"><button className="menu-trigger desktop" onClick={() => setCollapsed(!collapsed)} aria-label={collapsed ? "Expandir menu" : "Recolher menu"}><Icon name="menu"/></button><button className="menu-trigger mobile" onClick={() => setMenuOpen(true)} aria-label="Abrir menu"><Icon name="menu"/></button><div className="breadcrumb"><span>Portal PENN</span><b>/</b><strong>{{ overview: "Visão geral", products: "Produtos", "new-products": "Novos produtos", issues: "Problemas" }[activePage]}</strong></div><div className="topbar-actions"><span className="environment"><i/> Ambiente interno</span><button className="notification" aria-label="Notificações">●</button></div></header>
+        <div className="main-content">{activePage === "overview" ? <OverviewDashboard onOpenProducts={() => setActivePage("products")} onOpenIssues={() => setActivePage("issues")} /> : activePage === "new-products" ? <NewProductsDashboard onOpenProducts={() => setActivePage("products")} /> : activePage === "issues" ? <IssuesDashboard /> : children}</div>
       </section>
     </div>
   );

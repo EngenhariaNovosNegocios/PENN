@@ -1,0 +1,83 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
+
+const emptyForm = { productCode: "", description: "", priority: "media", dueDate: "" };
+const priorityMeta = {
+  baixa: { label: "Baixa", className: "low" },
+  media: { label: "Média", className: "medium" },
+  alta: { label: "Alta", className: "high" },
+  critica: { label: "Crítica", className: "critical" },
+};
+
+function IssueIcon({ name }) {
+  const paths = {
+    alert: <><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.7 2.6 18a2 2 0 0 0 1.8 3h15.2a2 2 0 0 0 1.8-3L13.7 3.7a2 2 0 0 0-3.4 0Z"/></>,
+    plus: <path d="M12 5v14M5 12h14"/>,
+    calendar: <><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></>,
+    box: <><path d="m21 8-9 5-9-5"/><path d="M3 8l9-5 9 5v8l-9 5-9-5Z"/></>,
+  };
+  return <svg aria-hidden="true" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8">{paths[name]}</svg>;
+}
+
+export default function IssuesDashboard() {
+  const [products, setProducts] = useState([]);
+  const [issues, setIssues] = useState([]);
+  const [form, setForm] = useState(emptyForm);
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState("");
+  const [priorityFilter, setPriorityFilter] = useState("todos");
+
+  async function loadData() {
+    const [productsResult, issuesResult] = await Promise.all([
+      supabase.from("products").select("id, code, name, status").order("code"),
+      supabase.from("product_issues").select("id, product_id, product_code, description, priority, due_date, created_at").is("resolved_at", null).order("created_at", { ascending: false }),
+    ]);
+    setProducts(productsResult.data ?? []);
+    setIssues(issuesResult.data ?? []);
+  }
+
+  useEffect(() => { loadData(); }, []);
+
+  async function registerIssue(event) {
+    event.preventDefault();
+    const product = products.find((item) => item.code.toLowerCase() === form.productCode.trim().toLowerCase());
+    if (!product) { setMessage("Informe um código de produto válido."); return; }
+    setSubmitting(true); setMessage("");
+    const { data, error } = await supabase.from("product_issues").insert({ product_id: product.id, product_code: product.code, description: form.description.trim(), priority: form.priority, due_date: form.dueDate }).select("id, product_id, product_code, description, priority, due_date, created_at").single();
+    if (error) { setMessage(`Não foi possível registrar: ${error.message}`); setSubmitting(false); return; }
+    await supabase.from("products").update({ status: "manutencao" }).eq("id", product.id);
+    setIssues((current) => [data, ...current]);
+    setProducts((current) => current.map((item) => item.id === product.id ? { ...item, status: "manutencao" } : item));
+    setForm(emptyForm); setSubmitting(false); setMessage("Problema registrado com sucesso.");
+  }
+
+  const filteredIssues = issues.filter((issue) => priorityFilter === "todos" || issue.priority === priorityFilter);
+  const groups = useMemo(() => products.map((product) => ({ product, issues: filteredIssues.filter((issue) => issue.product_id === product.id) })).filter((group) => group.issues.length > 0), [products, filteredIssues]);
+  const overdue = issues.filter((issue) => issue.due_date && new Date(`${issue.due_date}T23:59:59`) < new Date()).length;
+  const critical = issues.filter((issue) => issue.priority === "critica").length;
+
+  return (
+    <main className="issues-page">
+      <section className="issues-hero"><div><span><IssueIcon name="alert"/> Central de ocorrências</span><h1>Problemas de produtos</h1><p>Registre, priorize e acompanhe impedimentos de todo o portfólio em um único lugar.</p></div><div className="issues-hero-stats"><div><strong>{issues.length}</strong><span>abertos</span></div><div><strong>{overdue}</strong><span>atrasados</span></div><div><strong>{critical}</strong><span>críticos</span></div></div></section>
+
+      <section className="issue-register-panel">
+        <header><span className="issue-register-icon"><IssueIcon name="plus"/></span><div><span className="panel-kicker">Nova ocorrência</span><h2>Registrar problema</h2></div></header>
+        <form onSubmit={registerIssue}>
+          <label>Código do produto<input list="product-codes" required value={form.productCode} onChange={(event) => setForm({ ...form, productCode: event.target.value })} placeholder="Ex.: PENN-001"/><datalist id="product-codes">{products.map((product) => <option key={product.id} value={product.code}>{product.name}</option>)}</datalist></label>
+          <label className="issue-description-field">Descrição do problema<textarea required rows="3" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Descreva claramente o problema encontrado..."/></label>
+          <label>Prazo para resolução<input required type="date" value={form.dueDate} onChange={(event) => setForm({ ...form, dueDate: event.target.value })}/></label>
+          <label>Prioridade<select value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })}>{Object.entries(priorityMeta).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}</select></label>
+          <div className="issue-form-action"><button disabled={submitting}><IssueIcon name="plus"/>{submitting ? "Registrando..." : "Registrar problema"}</button></div>
+        </form>
+        {message && <p className={message.includes("sucesso") ? "issue-form-message success" : "issue-form-message"}>{message}</p>}
+      </section>
+
+      <section className="issues-board">
+        <header><div><span className="panel-kicker">Visão por produto</span><h2>Problemas abertos</h2></div><div className="priority-filters"><button className={priorityFilter === "todos" ? "active" : ""} onClick={() => setPriorityFilter("todos")}>Todos</button>{Object.entries(priorityMeta).map(([value, meta]) => <button className={priorityFilter === value ? "active" : ""} key={value} onClick={() => setPriorityFilter(value)}>{meta.label}</button>)}</div></header>
+        <div className="issue-groups">{groups.map(({ product, issues: productIssues }) => <article className="issue-product-group" key={product.id}><header><span className="issue-product-symbol"><IssueIcon name="box"/></span><div><strong>{product.code}</strong><h3>{product.name}</h3></div><span>{productIssues.length} {productIssues.length === 1 ? "problema" : "problemas"}</span></header><div>{productIssues.map((issue, index) => { const isOverdue = issue.due_date && new Date(`${issue.due_date}T23:59:59`) < new Date(); return <div className="global-issue-row" key={issue.id}><span className="issue-order">{String(index + 1).padStart(2,"0")}</span><div><strong>{issue.description}</strong><span><i className={`priority-dot ${priorityMeta[issue.priority]?.className || "medium"}`}/>{priorityMeta[issue.priority]?.label || "Média"}</span></div><span className={isOverdue ? "issue-deadline overdue" : "issue-deadline"}><IssueIcon name="calendar"/>{issue.due_date ? new Date(`${issue.due_date}T12:00:00`).toLocaleDateString("pt-BR") : "Sem prazo"}</span></div>})}</div></article>)}{groups.length === 0 && <div className="issues-empty"><IssueIcon name="alert"/><strong>Nenhum problema encontrado</strong><span>Não há ocorrências abertas com este filtro.</span></div>}</div>
+      </section>
+    </main>
+  );
+}

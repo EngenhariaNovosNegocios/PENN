@@ -45,6 +45,20 @@ alter table public.product_issues
 add column if not exists resolved_at timestamptz;
 
 alter table public.product_issues
+add column if not exists due_date date;
+
+alter table public.product_issues
+add column if not exists priority text not null default 'media';
+
+alter table public.product_issues
+drop constraint if exists product_issues_priority_check;
+
+alter table public.product_issues
+add constraint product_issues_priority_check check (
+  priority in ('baixa', 'media', 'alta', 'critica')
+);
+
+alter table public.product_issues
 drop constraint if exists product_issues_resolution_check;
 
 alter table public.product_issues

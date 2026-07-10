@@ -21,7 +21,7 @@ function MetricIcon({ type }) {
   return <svg aria-hidden="true" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8">{paths[type]}</svg>;
 }
 
-export default function OverviewDashboard({ onOpenProducts }) {
+export default function OverviewDashboard({ onOpenProducts, onOpenIssues }) {
   const [data, setData] = useState({ products: [], issues: [], attachments: [], structure: [] });
   const [loading, setLoading] = useState(true);
 
@@ -69,7 +69,7 @@ export default function OverviewDashboard({ onOpenProducts }) {
 
       <section className="overview-metrics" aria-label="Métricas principais">
         <article className="metric-card blue"><span className="metric-icon"><MetricIcon type="products" /></span><div><small>Produtos cadastrados</small><strong>{loading ? "—" : data.products.length}</strong><span>{metrics.statuses.ativo ?? 0} em operação</span></div></article>
-        <article className="metric-card red"><span className="metric-icon"><MetricIcon type="issues" /></span><div><small>Problemas abertos</small><strong>{loading ? "—" : data.issues.length}</strong><span>{metrics.affected} produtos impactados</span></div></article>
+        <article className="metric-card red actionable"><span className="metric-icon"><MetricIcon type="issues" /></span><div><small>Problemas abertos</small><strong>{loading ? "—" : data.issues.length}</strong><span>{metrics.affected} produtos impactados</span></div><button onClick={onOpenIssues} aria-label="Abrir todos os problemas"><MetricIcon type="arrow" /></button></article>
         <article className="metric-card violet"><span className="metric-icon"><MetricIcon type="docs" /></span><div><small>Base documental</small><strong>{loading ? "—" : metrics.documents}</strong><span>{metrics.photos} fotos armazenadas</span></div></article>
         <article className="metric-card green"><span className="metric-icon"><MetricIcon type="structure" /></span><div><small>Itens de estrutura</small><strong>{loading ? "—" : data.structure.length}</strong><span>componentes mapeados</span></div></article>
       </section>
