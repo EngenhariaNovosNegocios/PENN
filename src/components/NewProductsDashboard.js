@@ -17,10 +17,17 @@ const workflowStages = [
 ];
 
 const emptyProject = { productCode: "", requester: "", owner: "", targetLaunchDate: "", targetPrice: "", expectedDemand: "", potentialClients: "", marketPotential: "", technicalSpecs: "", developmentReason: "" };
+const emptyPackage = { name: "", provisionalCode: "", supplier: "", currency: "BRL", dueDate: "" };
+const emptyPackageItem = { code: "", description: "", quantity: "1", unitType: "UN", unitPrice: "", mkp: "1", overhead: "0" };
 
 function FlowIcon({ name }) {
   const paths = { spark: <path d="m12 3 1.4 4.6L18 9l-4.6 1.4L12 15l-1.4-4.6L6 9l4.6-1.4Z"/>, arrow: <path d="m9 18 6-6-6-6"/>, check: <path d="m5 12 4 4L19 6"/>, clock: <><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></>, chevron: <path d="m6 9 6 6 6-6"/>, back: <path d="m15 18-6-6 6-6"/> };
   return <svg aria-hidden="true" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8">{paths[name]}</svg>;
+}
+
+function QuotationWorkspace({project,packages,items,selectedPackageId,setSelectedPackageId,showForm,setShowForm,packageForm,setPackageForm,itemForm,setItemForm,createPackage,addItem,updateStatus}) {
+  const projectPackages=packages.filter((pkg)=>pkg.project_id===project.id);const selected=packages.find((pkg)=>pkg.id===selectedPackageId);const selectedItems=items.filter((item)=>item.package_id===selectedPackageId);const total=(pkgItems)=>pkgItems.reduce((sum,item)=>sum+Number(item.unit_price)*Number(item.quantity)*Number(item.mkp)*(1+Number(item.overhead_rate)/100),0);
+  return <section className="quotation-workspace"><header><div><span className="panel-kicker">Composições complexas</span><h2>Pacotes de cotação</h2><p>Organize chicotes, kits e conjuntos sem misturar todos os componentes.</p></div><button onClick={()=>setShowForm(!showForm)}>+ Novo pacote</button></header>{showForm&&<form className="quotation-package-form" onSubmit={createPackage}><input required value={packageForm.name} onChange={(e)=>setPackageForm({...packageForm,name:e.target.value})} placeholder="Nome do conjunto"/><input value={packageForm.provisionalCode} onChange={(e)=>setPackageForm({...packageForm,provisionalCode:e.target.value})} placeholder="Código provisório"/><input value={packageForm.supplier} onChange={(e)=>setPackageForm({...packageForm,supplier:e.target.value})} placeholder="Fornecedor"/><select value={packageForm.currency} onChange={(e)=>setPackageForm({...packageForm,currency:e.target.value})}><option>BRL</option><option>USD</option></select><input type="date" value={packageForm.dueDate} onChange={(e)=>setPackageForm({...packageForm,dueDate:e.target.value})}/><button>Criar</button></form>}<div className="quotation-layout"><aside>{projectPackages.map((pkg)=>{const packageItems=items.filter((item)=>item.package_id===pkg.id);return <button className={selectedPackageId===pkg.id?"active":""} key={pkg.id} onClick={()=>setSelectedPackageId(pkg.id)}><span><strong>{pkg.name}</strong><small>{packageItems.length} componentes · {pkg.status}</small></span><b>{total(packageItems).toLocaleString(pkg.currency==="USD"?"en-US":"pt-BR",{style:"currency",currency:pkg.currency})}</b></button>})}</aside>{selected&&<div className="quotation-detail"><header><div><strong>{selected.name}</strong><small>{selected.supplier||"Fornecedor não definido"}</small></div><select value={selected.status} onChange={(e)=>updateStatus(selected,e.target.value)}><option value="draft">Em elaboração</option><option value="waiting_supplier">Aguardando fornecedor</option><option value="received">Recebida</option><option value="analysis">Em análise</option><option value="approved">Aprovada</option><option value="rejected">Reprovada</option></select></header><form className="quotation-item-form" onSubmit={addItem}><input value={itemForm.code} onChange={(e)=>setItemForm({...itemForm,code:e.target.value})} placeholder="Código"/><input required value={itemForm.description} onChange={(e)=>setItemForm({...itemForm,description:e.target.value})} placeholder="Componente ou serviço"/><input min=".01" step=".01" type="number" value={itemForm.quantity} onChange={(e)=>setItemForm({...itemForm,quantity:e.target.value})}/><select value={itemForm.unitType} onChange={(e)=>setItemForm({...itemForm,unitType:e.target.value})}>{["UN","PC","KIT","CX","KG","M","L","H"].map(u=><option key={u}>{u}</option>)}</select><input min="0" required step=".01" type="number" value={itemForm.unitPrice} onChange={(e)=>setItemForm({...itemForm,unitPrice:e.target.value})} placeholder="Valor unit."/><input min=".01" step=".01" type="number" value={itemForm.mkp} onChange={(e)=>setItemForm({...itemForm,mkp:e.target.value})} placeholder="MKP"/><input min="0" step=".01" type="number" value={itemForm.overhead} onChange={(e)=>setItemForm({...itemForm,overhead:e.target.value})} placeholder="Overhead %"/><button>Adicionar</button></form><div className="quotation-items">{selectedItems.map((item)=><div key={item.id}><span><strong>{item.description}</strong><small>{item.item_code||"Sem código"} · {item.quantity} {item.unit_type}</small></span><b>{total([item]).toLocaleString(selected.currency==="USD"?"en-US":"pt-BR",{style:"currency",currency:selected.currency})}</b></div>)}</div></div>}</div></section>;
 }
 
 export default function NewProductsDashboard({ onOpenProducts }) {
@@ -29,6 +36,8 @@ export default function NewProductsDashboard({ onOpenProducts }) {
   const [tasks, setTasks] = useState([]);
   const [taskAttachments, setTaskAttachments] = useState([]);
   const [launchHistory, setLaunchHistory] = useState([]);
+  const [quotationPackages, setQuotationPackages] = useState([]);
+  const [quotationItems, setQuotationItems] = useState([]);
   const [selectedProjectId, setSelectedProjectId] = useState(null);
   const [expandedStage, setExpandedStage] = useState("discovery");
   const [showForm, setShowForm] = useState(false);
@@ -37,18 +46,25 @@ export default function NewProductsDashboard({ onOpenProducts }) {
   const [saving, setSaving] = useState(false);
   const [expandedTaskId, setExpandedTaskId] = useState(null);
   const [taskNotes, setTaskNotes] = useState({});
+  const [packageForm, setPackageForm] = useState(emptyPackage);
+  const [packageItemForm, setPackageItemForm] = useState(emptyPackageItem);
+  const [selectedPackageId, setSelectedPackageId] = useState(null);
+  const [showPackageForm, setShowPackageForm] = useState(false);
 
   async function loadWorkflow() {
-    const [productsResult, projectsResult, tasksResult, attachmentsResult, historyResult] = await Promise.all([
+    const [productsResult, projectsResult, tasksResult, attachmentsResult, historyResult, packagesResult, quotationItemsResult] = await Promise.all([
       supabase.from("products").select("id, code, name, category, owner").order("code"),
       supabase.from("product_development_projects").select("*").order("created_at", { ascending: false }),
       supabase.from("product_development_tasks").select("*").order("sort_order"),
       supabase.from("product_development_task_attachments").select("*").order("created_at"),
       supabase.from("product_launch_date_history").select("*").order("changed_at", { ascending: false }),
+      supabase.from("quotation_packages").select("*").order("created_at", { ascending: false }),
+      supabase.from("quotation_package_items").select("*").order("created_at"),
     ]);
     if (projectsResult.error || tasksResult.error) { setMessage(`Execute o SQL do fluxo de desenvolvimento: ${projectsResult.error?.message ?? tasksResult.error?.message}`); }
     setProducts(productsResult.data ?? []); setProjects(projectsResult.data ?? []); setTasks(tasksResult.data ?? []);
     setTaskAttachments(attachmentsResult.data ?? []); setLaunchHistory(historyResult.data ?? []);
+    setQuotationPackages(packagesResult.data ?? []); setQuotationItems(quotationItemsResult.data ?? []);
   }
 
   useEffect(() => { loadWorkflow(); }, []);
@@ -102,11 +118,24 @@ export default function NewProductsDashboard({ onOpenProducts }) {
     const {data}=await supabase.from("product_launch_date_history").insert({project_id:selectedProject.id,old_date:oldDate||null,new_date:value||null,reason:reason.trim()}).select("*").single(); setProjects((current)=>current.map((p)=>p.id===selectedProject.id?{...p,target_launch_date:value||null}:p)); if(data)setLaunchHistory((current)=>[data,...current]);
   }
 
+  async function createQuotationPackage(event) {
+    event.preventDefault(); const {data,error}=await supabase.from("quotation_packages").insert({project_id:selectedProject.id,name:packageForm.name.trim(),provisional_code:packageForm.provisionalCode.trim()||null,supplier:packageForm.supplier.trim()||null,currency:packageForm.currency,due_date:packageForm.dueDate||null}).select("*").single();
+    if(error){setMessage(error.message);return;} setQuotationPackages((current)=>[data,...current]);setSelectedPackageId(data.id);setPackageForm(emptyPackage);setShowPackageForm(false);
+  }
+
+  async function addQuotationItem(event) {
+    event.preventDefault(); const {data,error}=await supabase.from("quotation_package_items").insert({package_id:selectedPackageId,item_code:packageItemForm.code.trim()||null,description:packageItemForm.description.trim(),quantity:Number(packageItemForm.quantity),unit_type:packageItemForm.unitType,unit_price:Number(packageItemForm.unitPrice),mkp:Number(packageItemForm.mkp),overhead_rate:Number(packageItemForm.overhead)}).select("*").single();
+    if(error){setMessage(error.message);return;}setQuotationItems((current)=>[...current,data]);setPackageItemForm(emptyPackageItem);
+  }
+
+  async function updatePackageStatus(pkg,status){const{data,error}=await supabase.from("quotation_packages").update({status}).eq("id",pkg.id).select("*").single();if(!error)setQuotationPackages((current)=>current.map((item)=>item.id===pkg.id?data:item));}
+
   if (selectedProject) return (
     <main className="flow-page"><button className="flow-back" onClick={() => setSelectedProjectId(null)}><FlowIcon name="back"/> Voltar aos projetos</button>
       <section className="flow-detail-hero"><div><span>{selectedProject.product?.code}</span><h1>{selectedProject.product?.name}</h1><p>{selectedProject.development_reason || "Fluxo estruturado de desenvolvimento e lançamento."}</p></div><div className="flow-detail-score"><strong>{selectedProject.progress}%</strong><span>concluído</span></div></section>
       <section className="flow-project-info"><div><span>Solicitante</span><strong>{selectedProject.requester || "Não definido"}</strong></div><div><span>Responsável</span><strong>{selectedProject.owner || "Não definido"}</strong></div><div className="launch-date-editor"><span>Lançamento previsto</span><input type="date" value={selectedProject.target_launch_date || ""} onChange={(event)=>changeLaunchDate(event.target.value)} /><small>{launchHistory.filter((item)=>item.project_id===selectedProject.id).length} alterações registradas</small></div><div><span>Preço objetivo</span><strong>{selectedProject.target_price ? Number(selectedProject.target_price).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "Não definido"}</strong></div></section>
       {launchHistory.some((item)=>item.project_id===selectedProject.id)&&<details className="launch-history"><summary>Histórico da previsão de lançamento</summary>{launchHistory.filter((item)=>item.project_id===selectedProject.id).map((item)=><div key={item.id}><strong>{item.old_date||"Sem data"} → {item.new_date||"Sem data"}</strong><span>{item.reason}</span><small>{new Date(item.changed_at).toLocaleString("pt-BR")}</small></div>)}</details>}
+      <QuotationWorkspace project={selectedProject} packages={quotationPackages} items={quotationItems} selectedPackageId={selectedPackageId} setSelectedPackageId={setSelectedPackageId} showForm={showPackageForm} setShowForm={setShowPackageForm} packageForm={packageForm} setPackageForm={setPackageForm} itemForm={packageItemForm} setItemForm={setPackageItemForm} createPackage={createQuotationPackage} addItem={addQuotationItem} updateStatus={updatePackageStatus} />
       <section className="flow-stage-list">{workflowStages.map((stage) => { const stageTasks=selectedProject.projectTasks.filter((task)=>task.stage_key===stage.key);const done=stageTasks.filter((task)=>["completed","not_applicable"].includes(task.status)).length;const open=expandedStage===stage.key;return <article className={`flow-stage ${open?"open":""}`} key={stage.key}><button className="flow-stage-header" onClick={()=>setExpandedStage(open?"":stage.key)}><span className={`flow-stage-number ${stage.color}`}>{stage.number}</span><div><strong>{stage.title}</strong><small>{stage.area}</small></div><div className="flow-stage-progress"><span>{done}/{stageTasks.length}</span><i><b style={{width:`${stageTasks.length?done/stageTasks.length*100:0}%`}}/></i></div><FlowIcon name="chevron"/></button>{open&&<div className="flow-task-list">{stageTasks.map((task)=><div className={`flow-task-wrap ${task.status}`} key={task.id}><div className="flow-task"><button className="flow-task-check" onClick={()=>updateTask(task,task.status==="completed"?"pending":"completed")}>{task.status==="completed"&&<FlowIcon name="check"/>}</button><span>{task.title}</span><button className="task-detail-trigger" onClick={()=>setExpandedTaskId(expandedTaskId===task.id?null:task.id)}>Observações e anexos</button><select aria-label={`Status de ${task.title}`} value={task.status} onChange={(event)=>updateTask(task,event.target.value)}><option value="pending">Pendente</option><option value="in_progress">Em andamento</option><option value="blocked">Bloqueado</option><option value="completed">Concluído</option><option value="not_applicable">Não aplicável</option></select></div>{expandedTaskId===task.id&&<div className="task-evidence"><label>Observações<textarea rows="3" value={taskNotes[task.id]??task.notes??""} onChange={(event)=>setTaskNotes((current)=>({...current,[task.id]:event.target.value}))}/></label><button onClick={()=>saveTaskNote(task)}>Salvar observação</button><label>Anexar evidência<input type="file" onChange={(event)=>uploadTaskAttachment(task,event.target.files?.[0])}/></label><div>{taskAttachments.filter((item)=>item.task_id===task.id).map((item)=><a href={item.public_url} key={item.id} rel="noreferrer" target="_blank">{item.name}</a>)}</div></div>}</div>)}</div>}</article>;})}</section>
     </main>
   );

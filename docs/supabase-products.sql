@@ -174,6 +174,31 @@ create table if not exists public.product_launch_date_history (
   changed_at timestamptz not null default now()
 );
 
+create table if not exists public.quotation_packages (
+  id bigint primary key generated always as identity,
+  project_id bigint not null references public.product_development_projects(id) on delete cascade,
+  name text not null,
+  provisional_code text,
+  supplier text,
+  currency text not null default 'BRL' check (currency in ('BRL','USD')),
+  due_date date,
+  status text not null default 'draft' check (status in ('draft','waiting_supplier','received','analysis','approved','rejected')),
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.quotation_package_items (
+  id bigint primary key generated always as identity,
+  package_id bigint not null references public.quotation_packages(id) on delete cascade,
+  item_code text,
+  description text not null,
+  quantity numeric not null default 1 check (quantity > 0),
+  unit_type text not null default 'UN',
+  unit_price numeric not null default 0 check (unit_price >= 0),
+  mkp numeric not null default 1 check (mkp > 0),
+  overhead_rate numeric not null default 0 check (overhead_rate >= 0),
+  created_at timestamptz not null default now()
+);
+
 alter table public.product_budget_items drop constraint if exists product_budget_items_quantity_check;
 alter table public.product_budget_items add constraint product_budget_items_quantity_check check (quantity > 0);
 alter table public.product_budget_items drop constraint if exists product_budget_items_unit_type_check;
@@ -196,6 +221,8 @@ alter table public.raw_materials enable row level security;
 alter table public.product_categories enable row level security;
 alter table public.product_development_task_attachments enable row level security;
 alter table public.product_launch_date_history enable row level security;
+alter table public.quotation_packages enable row level security;
+alter table public.quotation_package_items enable row level security;
 
 grant select, insert, delete on public.product_structure_items to anon;
 grant select, insert, update, delete on public.product_issues to anon;
@@ -209,6 +236,8 @@ grant select, insert, update, delete on public.raw_materials to anon;
 grant select, insert, update, delete on public.product_categories to anon;
 grant select, insert, delete on public.product_development_task_attachments to anon;
 grant select, insert on public.product_launch_date_history to anon;
+grant select, insert, update, delete on public.quotation_packages to anon;
+grant select, insert, update, delete on public.quotation_package_items to anon;
 
 drop policy if exists "ncm_taxes_select" on public.ncm_taxes;
 drop policy if exists "product_structure_items_select" on public.product_structure_items;
@@ -233,6 +262,8 @@ drop policy if exists "raw_materials_all" on public.raw_materials;
 drop policy if exists "product_categories_all" on public.product_categories;
 drop policy if exists "development_task_attachments_all" on public.product_development_task_attachments;
 drop policy if exists "launch_date_history_all" on public.product_launch_date_history;
+drop policy if exists "quotation_packages_all" on public.quotation_packages;
+drop policy if exists "quotation_package_items_all" on public.quotation_package_items;
 
 create policy "ncm_taxes_select"
 on public.ncm_taxes
@@ -336,3 +367,5 @@ using (true) with check (true);
 create policy "product_categories_all" on public.product_categories for all to anon using (true) with check (true);
 create policy "development_task_attachments_all" on public.product_development_task_attachments for all to anon using (true) with check (true);
 create policy "launch_date_history_all" on public.product_launch_date_history for all to anon using (true) with check (true);
+create policy "quotation_packages_all" on public.quotation_packages for all to anon using (true) with check (true);
+create policy "quotation_package_items_all" on public.quotation_package_items for all to anon using (true) with check (true);
