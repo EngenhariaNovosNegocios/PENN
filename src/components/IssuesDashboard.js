@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
-const emptyForm = { productCode: "", description: "", priority: "media", dueDate: "" };
+const emptyForm = { productCode: "", description: "", priority: "media", dueDate: "", assigneeName:"", assigneeEmail:"" };
 const priorityMeta = {
   baixa: { label: "Baixa", className: "low" },
   media: { label: "Média", className: "medium" },
@@ -75,7 +75,7 @@ export default function IssuesDashboard({ onOpenProduct }) {
     const product = products.find((item) => item.code.toLowerCase() === form.productCode.trim().toLowerCase());
     if (!product) { setMessage("Informe um código de produto válido."); return; }
     setSubmitting(true); setMessage("");
-    const { data, error } = await supabase.from("product_issues").insert({ product_id: product.id, product_code: product.code, description: form.description.trim(), priority: form.priority, due_date: form.dueDate }).select("id, product_id, product_code, description, priority, due_date, created_at").single();
+    const { data, error } = await supabase.from("product_issues").insert({ product_id: product.id, product_code: product.code, description: form.description.trim(), priority: form.priority, due_date: form.dueDate, assignee_name:form.assigneeName.trim()||null, assignee_email:form.assigneeEmail.trim()||null }).select("id, product_id, product_code, description, priority, due_date, created_at").single();
     if (error) { setMessage(`Não foi possível registrar: ${error.message}`); setSubmitting(false); return; }
     await supabase.from("products").update({ status: "manutencao" }).eq("id", product.id);
     setIssues((current) => [data, ...current]);
@@ -99,6 +99,7 @@ export default function IssuesDashboard({ onOpenProduct }) {
           <label className="issue-description-field">Descrição da pendência<textarea minLength="10" required rows="3" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Descreva claramente a pendência encontrada (mínimo de 10 caracteres)..."/></label>
           <label>Prazo para resolução<input required type="date" value={form.dueDate} onChange={(event) => setForm({ ...form, dueDate: event.target.value })}/></label>
           <label>Prioridade<select value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })}>{Object.entries(priorityMeta).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}</select></label>
+          <label>Responsável<input value={form.assigneeName} onChange={event=>setForm({...form,assigneeName:event.target.value})} placeholder="Nome do responsável"/></label><label>E-mail do responsável<input type="email" value={form.assigneeEmail} onChange={event=>setForm({...form,assigneeEmail:event.target.value})} placeholder="usuario@empresa.com"/></label>
           <div className="issue-form-action"><button disabled={submitting}><IssueIcon name="plus"/>{submitting ? "Registrando..." : "Registrar problema"}</button></div>
         </form>
         {message && <p className={message.includes("sucesso") ? "issue-form-message success" : "issue-form-message"}>{message}</p>}

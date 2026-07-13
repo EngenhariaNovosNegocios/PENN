@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import SupplierDashboard from "@/components/SupplierDashboard";
 
 const statusOptions = {
   ativo: {
@@ -836,6 +837,7 @@ export default function ProductManager() {
           </span>
         </button>
         <button className={viewMode === "materials" ? "active" : ""} onClick={() => setViewMode("materials")} type="button"><span className="workspace-tab-icon">MP</span><span><strong>Matérias-primas</strong><small>Cadastro mestre de códigos</small></span></button>
+        <button className={viewMode === "suppliers" ? "active" : ""} onClick={() => setViewMode("suppliers")} type="button"><span className="workspace-tab-icon">SRM</span><span><strong>Fornecedores</strong><small>Produtos, materiais e relacionamento</small></span></button>
         {selectedProduct && viewMode === "detail" && (
           <button
             className={viewMode === "detail" ? "active contextual-tab" : "contextual-tab"}
@@ -1343,6 +1345,8 @@ export default function ProductManager() {
       {viewMode === "materials" && (
         <section className="materials-manager panel"><div className="panel-heading"><div><span className="form-step">Cadastro mestre</span><h2>Códigos de matéria-prima</h2></div><span>{rawMaterials.length} códigos</span></div><form className="materials-form" onSubmit={addRawMaterial}><label>Código<input required value={rawMaterialForm.code} onChange={(e)=>setRawMaterialForm({...rawMaterialForm,code:e.target.value})} placeholder="Ex.: MP-0001" /></label><label>Descrição<input required value={rawMaterialForm.name} onChange={(e)=>setRawMaterialForm({...rawMaterialForm,name:e.target.value})} placeholder="Ex.: Chapa inox 2mm" /></label><label>Unidade<select value={rawMaterialForm.unitType} onChange={(e)=>setRawMaterialForm({...rawMaterialForm,unitType:e.target.value})}>{["UN","PC","KIT","CX","KG","M","L","H"].map((unit)=><option key={unit}>{unit}</option>)}</select></label><button>Cadastrar matéria-prima</button></form><div className="materials-grid">{rawMaterials.map((material)=><article key={material.id}><span className="material-code">{material.code}</span><div><strong>{material.name}</strong><small>{material.unit_type} · {material.is_provisional ? "Provisório" : "Código oficial"}</small></div></article>)}</div></section>
       )}
+
+      {viewMode === "suppliers" && <SupplierDashboard />}
 
       {viewMode === "create" && (
       <section className="panel form-panel">

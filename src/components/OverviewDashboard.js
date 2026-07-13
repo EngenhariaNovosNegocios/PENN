@@ -16,32 +16,37 @@ function MetricIcon({ type }) {
     issues: <><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.7 2.6 18a2 2 0 0 0 1.8 3h15.2a2 2 0 0 0 1.8-3L13.7 3.7a2 2 0 0 0-3.4 0Z"/></>,
     docs: <><path d="M6 2h9l4 4v16H6Z"/><path d="M14 2v5h5M9 12h7M9 16h7"/></>,
     structure: <><path d="M12 3v6M6 21v-5h12v5M6 16v-3h12v3"/><circle cx="12" cy="10" r="2"/></>,
+    development: <><path d="m12 3 1.4 4.6L18 9l-4.6 1.4L12 15l-1.4-4.6L6 9l4.6-1.4Z"/><path d="M19 16v6M16 19h6"/></>,
     arrow: <path d="m9 18 6-6-6-6"/>,
   };
   return <svg aria-hidden="true" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8">{paths[type]}</svg>;
 }
 
 export default function OverviewDashboard({ onOpenProducts, onOpenIssues }) {
-  const [data, setData] = useState({ products: [], issues: [], attachments: [], structure: [] });
+  const [data, setData] = useState({ products: [], issues: [], attachments: [], structure: [], projects: [], overdueTasks: [] });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadOverview() {
-      const [productsResult, issuesResult, attachmentsResult, structureResult] = await Promise.all([
+      const today=new Date().toISOString().slice(0,10); const [productsResult, issuesResult, attachmentsResult, structureResult, projectsResult, tasksResult] = await Promise.all([
         supabase.from("products").select("id, name, code, status, ncm, owner, characteristics, created_at").order("created_at", { ascending: false }),
         supabase.from("product_issues").select("id, product_id, product_code, description, created_at").is("resolved_at", null).order("created_at", { ascending: false }),
         supabase.from("product_attachments").select("id, product_id, kind, file_type"),
         supabase.from("product_structure_items").select("id, product_id"),
+        supabase.from("product_development_projects").select("id, target_launch_date, archived_at").is("archived_at", null),
+        supabase.from("product_development_tasks").select("id,title,due_date,assignee_name,owner_area,status,product_development_projects(products(code,name))").lt("due_date",today).not("status","in","(completed,not_applicable)").order("due_date"),
       ]);
       setData({
         products: productsResult.data ?? [],
         issues: issuesResult.data ?? [],
         attachments: attachmentsResult.data ?? [],
         structure: structureResult.data ?? [],
+        projects: projectsResult.data ?? [],
+        overdueTasks: tasksResult.data ?? [],
       });
       setLoading(false);
     }
-    loadOverview();
+    loadOverview(); window.addEventListener("penn:tasks-changed",loadOverview); return()=>window.removeEventListener("penn:tasks-changed",loadOverview);
   }, []);
 
   const metrics = useMemo(() => {
@@ -50,10 +55,13 @@ export default function OverviewDashboard({ onOpenProducts, onOpenIssues }) {
     const documents = data.attachments.filter((item) => item.kind === "document").length;
     const photos = data.attachments.filter((item) => item.kind === "photo").length;
     const complete = data.products.filter((product) => product.ncm && product.owner && product.characteristics).length;
+    const limit = new Date(); limit.setDate(limit.getDate() + 30);
+    const launchesAtRisk = data.projects.filter((project) => project.target_launch_date && new Date(`${project.target_launch_date}T23:59:59`) <= limit).length;
     return {
       statuses, documents, photos,
       completeness: data.products.length ? Math.round((complete / data.products.length) * 100) : 0,
       affected: new Set(data.issues.map((issue) => issue.product_id)).size,
+      launchesAtRisk,
     };
   }, [data]);
 
@@ -71,7 +79,7 @@ export default function OverviewDashboard({ onOpenProducts, onOpenIssues }) {
         <article className="metric-card blue actionable"><span className="metric-icon"><MetricIcon type="products" /></span><div><small>Produtos cadastrados</small><strong>{loading ? "—" : data.products.length}</strong><span>{metrics.statuses.ativo ?? 0} em operação</span></div><button onClick={onOpenProducts} aria-label="Abrir produtos"><MetricIcon type="arrow" /></button></article>
         <article className="metric-card red actionable"><span className="metric-icon"><MetricIcon type="issues" /></span><div><small>Pendências abertas</small><strong>{loading ? "—" : data.issues.length}</strong><span>{metrics.affected} produtos impactados</span></div><button onClick={onOpenIssues} aria-label="Abrir todas as pendências"><MetricIcon type="arrow" /></button></article>
         <article className="metric-card violet"><span className="metric-icon"><MetricIcon type="docs" /></span><div><small>Base documental</small><strong>{loading ? "—" : data.attachments.length}</strong><span>{metrics.documents} documentos · {metrics.photos} fotos</span></div></article>
-        <article className="metric-card green"><span className="metric-icon"><MetricIcon type="structure" /></span><div><small>Itens de estrutura</small><strong>{loading ? "—" : data.structure.length}</strong><span>componentes mapeados</span></div></article>
+        <article className="metric-card green"><span className="metric-icon"><MetricIcon type="development" /></span><div><small>Projetos NPI ativos</small><strong>{loading ? "—" : data.projects.length}</strong><span>{metrics.launchesAtRisk} vencidos ou nos próximos 30 dias</span></div></article>
       </section>
 
       <section className="overview-grid">
@@ -95,9 +103,9 @@ export default function OverviewDashboard({ onOpenProducts, onOpenIssues }) {
           <div className="overview-issue-list">{data.issues.slice(0, 5).map((issue) => <div key={issue.id}><span className="issue-severity">!</span><span><strong>{issue.product_code}</strong><small>{issue.description}</small></span><time>{new Date(issue.created_at).toLocaleDateString("pt-BR")}</time></div>)}{!loading && data.issues.length === 0 && <div className="overview-empty">Nenhuma pendência aberta. Excelente trabalho!</div>}</div>
         </article>
 
-        <article className="dashboard-panel recent-panel">
-          <header><div><span className="panel-kicker">Últimos cadastros</span><h2>Produtos recentes</h2></div></header>
-          <div className="recent-products">{data.products.slice(0, 5).map((product) => <div key={product.id}><span>{product.code?.slice(-2) || "#"}</span><div><strong>{product.code}</strong><small>{product.name}</small></div><i className={`status-dot ${product.status}`} /></div>)}</div>
+        <article className="dashboard-panel overdue-tasks-panel">
+          <header><div><span className="panel-kicker">Ação imediata</span><h2>Tarefas vencidas</h2></div><span className="overdue-count">{data.overdueTasks.length}</span></header>
+          <div className="overview-task-list">{data.overdueTasks.slice(0,5).map(task=><div key={task.id}><span>!</span><div><strong>{task.title}</strong><small>{task.product_development_projects?.products?.code} · {task.assignee_name||task.owner_area||"Sem responsável"}</small></div><time>{new Date(`${task.due_date}T12:00:00`).toLocaleDateString("pt-BR")}</time></div>)}{!loading&&data.overdueTasks.length===0&&<div className="overview-empty">Nenhuma tarefa vencida.</div>}</div>
         </article>
       </section>
     </main>

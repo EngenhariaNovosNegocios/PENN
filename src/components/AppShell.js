@@ -1,10 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import OverviewDashboard from "@/components/OverviewDashboard";
 import NewProductsDashboard from "@/components/NewProductsDashboard";
 import IssuesDashboard from "@/components/IssuesDashboard";
 import StrategicIntelligenceDashboard from "@/components/StrategicIntelligenceDashboard";
+import IssuesHistoryDashboard from "@/components/IssuesHistoryDashboard";
+import UserProfileDashboard from "@/components/UserProfileDashboard";
+import { supabase } from "@/lib/supabaseClient";
 
 const Icon = ({ name }) => {
   const paths = {
@@ -28,6 +31,7 @@ const navigation = [
   { id: "new-products", label: "Novos produtos", icon: "spark" },
   { id: "intelligence", label: "Inteligência NPI", icon: "brain" },
   { id: "issues", label: "Pendências", icon: "alert" },
+  { id: "issues-history", label: "Histórico resolvido", icon: "file" },
   { label: "Indicadores", icon: "chart", disabled: true },
   { label: "Relatórios", icon: "file", disabled: true },
 ];
@@ -36,22 +40,27 @@ export default function AppShell({ children }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [activePage, setActivePage] = useState("overview");
+  const [overdueTasks,setOverdueTasks]=useState([]);
+  const [profileName,setProfileName]=useState("Equipe PENN");
+  useEffect(()=>{async function loadNotifications(){const{data:{user}}=await supabase.auth.getUser();const name=user?.user_metadata?.full_name||user?.email?.split("@")[0]||"Equipe PENN";setProfileName(name);const today=new Date().toISOString().slice(0,10);const{data}=await supabase.from("product_development_tasks").select("id,title,due_date,assignee_name,assignee_email").lt("due_date",today).not("status","in",'(completed,not_applicable)');setOverdueTasks((data??[]).filter(task=>!user?.email||(task.assignee_email||"").toLowerCase()===user.email.toLowerCase()||(task.assignee_name||"").toLowerCase()===name.toLowerCase()));}loadNotifications();window.addEventListener("penn:tasks-changed",loadNotifications);return()=>window.removeEventListener("penn:tasks-changed",loadNotifications);},[]);
   return (
     <div className={`app-shell ${collapsed ? "sidebar-collapsed" : ""}`}>
       <aside className={`app-sidebar ${menuOpen ? "mobile-open" : ""}`}>
         <div className="brand"><span className="brand-mark">P</span><span className="brand-copy"><strong>PENN</strong><small>Engenharia & Negócios</small></span><button className="mobile-close" onClick={() => setMenuOpen(false)} aria-label="Fechar menu"><Icon name="close" /></button></div>
         <nav className="primary-nav" aria-label="Navegação principal"><span className="nav-section-label">Workspace</span>{navigation.map((item) => <button className={`nav-item ${activePage === item.id ? "active" : ""}`} disabled={item.disabled} key={item.label} onClick={() => { if (item.id) setActivePage(item.id); setMenuOpen(false); }} title={collapsed ? item.label : undefined}><Icon name={item.icon}/><span>{item.label}</span>{item.disabled && <small>Em breve</small>}</button>)}</nav>
-        <div className="sidebar-footer"><button className="nav-item" disabled><Icon name="settings"/><span>Configurações</span></button><button className="nav-item" disabled><Icon name="help"/><span>Ajuda</span></button><div className="user-card"><span className="avatar">EN</span><span><strong>Equipe PENN</strong><small>Engenharia</small></span><span className="online-dot"/></div></div>
+        <div className="sidebar-footer"><button className="nav-item" disabled><Icon name="settings"/><span>Configurações</span></button><button className="nav-item" disabled><Icon name="help"/><span>Ajuda</span></button><button className="user-card" onClick={()=>setActivePage("profile")}><span className="avatar">{profileName.slice(0,2).toUpperCase()}</span><span><strong>{profileName}</strong><small>Meu perfil e pendências</small></span><span className="online-dot"/></button></div>
       </aside>
       {menuOpen && <button className="sidebar-backdrop" onClick={() => setMenuOpen(false)} aria-label="Fechar menu"/>}
       <section className="app-stage">
-        <header className="topbar"><button className="menu-trigger desktop" onClick={() => setCollapsed(!collapsed)} aria-label={collapsed ? "Expandir menu" : "Recolher menu"}><Icon name="menu"/></button><button className="menu-trigger mobile" onClick={() => setMenuOpen(true)} aria-label="Abrir menu"><Icon name="menu"/></button><div className="breadcrumb"><span>Portal PENN</span><b>/</b><strong>{{ overview: "Visão geral", products: "Produtos", "new-products": "Novos produtos", intelligence: "Inteligência NPI", issues: "Pendências", indicators: "Indicadores", reports: "Relatórios" }[activePage]}</strong></div><div className="topbar-actions"><span className="environment"><i/> Ambiente interno</span><button className="notification" aria-label="Notificações">●</button></div></header>
+        <header className="topbar"><button className="menu-trigger desktop" onClick={() => setCollapsed(!collapsed)} aria-label={collapsed ? "Expandir menu" : "Recolher menu"}><Icon name="menu"/></button><button className="menu-trigger mobile" onClick={() => setMenuOpen(true)} aria-label="Abrir menu"><Icon name="menu"/></button><div className="breadcrumb"><span>Portal PENN</span><b>/</b><strong>{{ overview: "Visão geral", products: "Produtos", "new-products": "Novos produtos", intelligence: "Inteligência NPI", issues: "Pendências", "issues-history":"Histórico resolvido", profile:"Meu perfil", indicators: "Indicadores", reports: "Relatórios" }[activePage]}</strong></div><div className="topbar-actions"><span className="environment"><i/> Ambiente interno</span><button className={`notification ${overdueTasks.length?"has-alert":""}`} onClick={()=>setActivePage("profile")} aria-label={`${overdueTasks.length} tarefas vencidas`}>●{overdueTasks.length>0&&<b>{overdueTasks.length}</b>}</button></div></header>
         <div className="main-content">
           <section className="app-page" hidden={activePage !== "overview"}><OverviewDashboard onOpenProducts={() => setActivePage("products")} onOpenIssues={() => setActivePage("issues")} /></section>
           <section className="app-page" hidden={activePage !== "products"}>{children}</section>
           <section className="app-page" hidden={activePage !== "new-products"}><NewProductsDashboard onOpenProducts={() => setActivePage("products")} /></section>
           <section className="app-page" hidden={activePage !== "intelligence"}><StrategicIntelligenceDashboard onOpenProduct={(productId) => { setActivePage("products"); window.setTimeout(() => window.dispatchEvent(new CustomEvent("penn:open-product", { detail: { productId } })), 0); }} /></section>
           <section className="app-page" hidden={activePage !== "issues"}><IssuesDashboard onOpenProduct={(productId) => { setActivePage("products"); window.setTimeout(() => window.dispatchEvent(new CustomEvent("penn:open-product", { detail: { productId } })), 0); }} /></section>
+          <section className="app-page" hidden={activePage !== "issues-history"}><IssuesHistoryDashboard /></section>
+          <section className="app-page" hidden={activePage !== "profile"}><UserProfileDashboard /></section>
         </div>
       </section>
     </div>

@@ -226,6 +226,58 @@ create table if not exists public.product_development_project_history (
   changed_at timestamptz not null default now()
 );
 
+alter table public.product_development_tasks add column if not exists assignee_name text;
+alter table public.product_development_tasks add column if not exists assignee_email text;
+alter table public.product_issues add column if not exists assignee_name text;
+alter table public.product_issues add column if not exists assignee_email text;
+
+create table if not exists public.user_profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  full_name text,
+  email text not null unique,
+  area text,
+  phone text,
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.suppliers (
+  id bigint primary key generated always as identity,
+  name text not null unique,
+  tax_id text,
+  contact_name text,
+  email text,
+  whatsapp text,
+  phone text,
+  website text,
+  country text,
+  city text,
+  payment_terms text,
+  lead_time_days integer check (lead_time_days is null or lead_time_days >= 0),
+  rating numeric check (rating is null or rating between 0 and 5),
+  status text not null default 'active' check (status in ('active','qualification','blocked','inactive')),
+  notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.supplier_products (
+  supplier_id bigint not null references public.suppliers(id) on delete cascade,
+  product_id bigint not null references public.products(id) on delete cascade,
+  supplier_part_number text,
+  is_preferred boolean not null default false,
+  primary key (supplier_id, product_id)
+);
+
+create table if not exists public.supplier_materials (
+  supplier_id bigint not null references public.suppliers(id) on delete cascade,
+  raw_material_id bigint not null references public.raw_materials(id) on delete cascade,
+  supplier_part_number text,
+  last_price numeric check (last_price is null or last_price >= 0),
+  currency text not null default 'BRL' check (currency in ('BRL','USD')),
+  minimum_order numeric check (minimum_order is null or minimum_order >= 0),
+  primary key (supplier_id, raw_material_id)
+);
+
 -- Base consolidada para recomendações e priorização estratégica de NPI.
 create table if not exists public.product_strategic_profiles (
   id bigint primary key generated always as identity,
@@ -288,6 +340,10 @@ alter table public.quotation_package_items enable row level security;
 alter table public.product_strategic_profiles enable row level security;
 alter table public.product_strategic_history enable row level security;
 alter table public.product_development_project_history enable row level security;
+alter table public.user_profiles enable row level security;
+alter table public.suppliers enable row level security;
+alter table public.supplier_products enable row level security;
+alter table public.supplier_materials enable row level security;
 
 grant select, insert, delete on public.product_structure_items to anon;
 grant select, insert, update, delete on public.product_issues to anon;
@@ -306,6 +362,10 @@ grant select, insert, update, delete on public.quotation_package_items to anon;
 grant select, insert, update, delete on public.product_strategic_profiles to anon;
 grant select, insert on public.product_strategic_history to anon;
 grant select, insert on public.product_development_project_history to anon;
+grant select, insert, update on public.user_profiles to anon;
+grant select, insert, update, delete on public.suppliers to anon;
+grant select, insert, update, delete on public.supplier_products to anon;
+grant select, insert, update, delete on public.supplier_materials to anon;
 
 drop policy if exists "ncm_taxes_select" on public.ncm_taxes;
 drop policy if exists "product_structure_items_select" on public.product_structure_items;
@@ -335,6 +395,10 @@ drop policy if exists "quotation_package_items_all" on public.quotation_package_
 drop policy if exists "product_strategic_profiles_all" on public.product_strategic_profiles;
 drop policy if exists "product_strategic_history_all" on public.product_strategic_history;
 drop policy if exists "development_project_history_all" on public.product_development_project_history;
+drop policy if exists "user_profiles_all" on public.user_profiles;
+drop policy if exists "suppliers_all" on public.suppliers;
+drop policy if exists "supplier_products_all" on public.supplier_products;
+drop policy if exists "supplier_materials_all" on public.supplier_materials;
 
 create policy "ncm_taxes_select"
 on public.ncm_taxes
@@ -443,3 +507,63 @@ create policy "quotation_package_items_all" on public.quotation_package_items fo
 create policy "product_strategic_profiles_all" on public.product_strategic_profiles for all to anon using (true) with check (true);
 create policy "product_strategic_history_all" on public.product_strategic_history for all to anon using (true) with check (true);
 create policy "development_project_history_all" on public.product_development_project_history for all to anon using (true) with check (true);
+create policy "user_profiles_all" on public.user_profiles for all to anon using (true) with check (true);
+create policy "suppliers_all" on public.suppliers for all to anon using (true) with check (true);
+create policy "supplier_products_all" on public.supplier_products for all to anon using (true) with check (true);
+create policy "supplier_materials_all" on public.supplier_materials for all to anon using (true) with check (true);
+
+-- Acesso equivalente para usuários autenticados; substituir por regras por função/área na implantação.
+grant select, update on public.products to authenticated;
+grant select, insert, update, delete on public.product_issues to authenticated;
+grant select, insert, update, delete on public.product_development_projects to authenticated;
+grant select, insert, update, delete on public.product_development_tasks to authenticated;
+grant select on public.product_structure_items, public.raw_materials to authenticated;
+grant select, insert, update on public.user_profiles to authenticated;
+grant select, insert, update, delete on public.suppliers, public.supplier_products, public.supplier_materials to authenticated;
+grant select on public.ncm_taxes to authenticated;
+grant select, insert, delete on public.product_structure_items, public.product_attachments, public.product_development_task_attachments to authenticated;
+grant select, insert, update, delete on public.product_budget_items, public.raw_materials, public.product_categories, public.quotation_packages, public.quotation_package_items, public.product_strategic_profiles to authenticated;
+grant select, insert on public.product_launch_date_history, public.product_strategic_history, public.product_development_project_history to authenticated;
+
+drop policy if exists "products_authenticated" on public.products;
+drop policy if exists "issues_authenticated" on public.product_issues;
+drop policy if exists "projects_authenticated" on public.product_development_projects;
+drop policy if exists "tasks_authenticated" on public.product_development_tasks;
+drop policy if exists "structure_authenticated" on public.product_structure_items;
+drop policy if exists "materials_authenticated" on public.raw_materials;
+drop policy if exists "profiles_authenticated" on public.user_profiles;
+drop policy if exists "suppliers_authenticated" on public.suppliers;
+drop policy if exists "supplier_products_authenticated" on public.supplier_products;
+drop policy if exists "supplier_materials_authenticated" on public.supplier_materials;
+create policy "products_authenticated" on public.products for all to authenticated using (true) with check (true);
+create policy "issues_authenticated" on public.product_issues for all to authenticated using (true) with check (true);
+create policy "projects_authenticated" on public.product_development_projects for all to authenticated using (true) with check (true);
+create policy "tasks_authenticated" on public.product_development_tasks for all to authenticated using (true) with check (true);
+create policy "structure_authenticated" on public.product_structure_items for select to authenticated using (true);
+create policy "materials_authenticated" on public.raw_materials for all to authenticated using (true) with check (true);
+create policy "profiles_authenticated" on public.user_profiles for all to authenticated using (true) with check (true);
+create policy "suppliers_authenticated" on public.suppliers for all to authenticated using (true) with check (true);
+create policy "supplier_products_authenticated" on public.supplier_products for all to authenticated using (true) with check (true);
+create policy "supplier_materials_authenticated" on public.supplier_materials for all to authenticated using (true) with check (true);
+drop policy if exists "ncm_authenticated" on public.ncm_taxes;
+drop policy if exists "attachments_authenticated" on public.product_attachments;
+drop policy if exists "task_attachments_authenticated" on public.product_development_task_attachments;
+drop policy if exists "budget_authenticated" on public.product_budget_items;
+drop policy if exists "categories_authenticated" on public.product_categories;
+drop policy if exists "launch_history_authenticated" on public.product_launch_date_history;
+drop policy if exists "quotations_authenticated" on public.quotation_packages;
+drop policy if exists "quotation_items_authenticated" on public.quotation_package_items;
+drop policy if exists "strategic_profiles_authenticated" on public.product_strategic_profiles;
+drop policy if exists "strategic_history_authenticated" on public.product_strategic_history;
+drop policy if exists "project_history_authenticated" on public.product_development_project_history;
+create policy "ncm_authenticated" on public.ncm_taxes for select to authenticated using (true);
+create policy "attachments_authenticated" on public.product_attachments for all to authenticated using (true) with check (true);
+create policy "task_attachments_authenticated" on public.product_development_task_attachments for all to authenticated using (true) with check (true);
+create policy "budget_authenticated" on public.product_budget_items for all to authenticated using (true) with check (true);
+create policy "categories_authenticated" on public.product_categories for all to authenticated using (true) with check (true);
+create policy "launch_history_authenticated" on public.product_launch_date_history for all to authenticated using (true) with check (true);
+create policy "quotations_authenticated" on public.quotation_packages for all to authenticated using (true) with check (true);
+create policy "quotation_items_authenticated" on public.quotation_package_items for all to authenticated using (true) with check (true);
+create policy "strategic_profiles_authenticated" on public.product_strategic_profiles for all to authenticated using (true) with check (true);
+create policy "strategic_history_authenticated" on public.product_strategic_history for all to authenticated using (true) with check (true);
+create policy "project_history_authenticated" on public.product_development_project_history for all to authenticated using (true) with check (true);
