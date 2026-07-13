@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
-const emptyForm = { productCode: "", description: "", priority: "media", dueDate: "", assigneeName:"", assigneeEmail:"" };
+const emptyForm = { productCode: "", description: "", priority: "media", dueDate: "", assigneeName:"" };
 const priorityMeta = {
   baixa: { label: "Baixa", className: "low" },
   media: { label: "Média", className: "medium" },
@@ -25,6 +25,7 @@ export default function IssuesDashboard({ onOpenProduct }) {
   const [products, setProducts] = useState([]);
   const [issues, setIssues] = useState([]);
   const [resolvedIssues, setResolvedIssues] = useState([]);
+  const [profiles, setProfiles] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
@@ -33,10 +34,11 @@ export default function IssuesDashboard({ onOpenProduct }) {
   const [showHistory, setShowHistory] = useState(false);
 
   async function loadData() {
-    const [productsResult, issuesResult, resolvedResult] = await Promise.all([
+    const [productsResult, issuesResult, resolvedResult, profilesResult] = await Promise.all([
       supabase.from("products").select("id, code, name, status").order("code"),
       supabase.from("product_issues").select("id, product_id, product_code, description, priority, due_date, created_at").is("resolved_at", null).order("created_at", { ascending: false }),
       supabase.from("product_issues").select("id, product_id, product_code, description, priority, due_date, created_at, resolved_at, resolution_note").not("resolved_at", "is", null).order("resolved_at", { ascending: false }),
+      supabase.from("user_profiles").select("id,full_name,email").order("full_name"),
     ]);
     if (productsResult.error || issuesResult.error) {
       setLoadingError(
@@ -50,6 +52,7 @@ export default function IssuesDashboard({ onOpenProduct }) {
     setProducts(productsResult.data ?? []);
     setIssues(issuesResult.data ?? []);
     setResolvedIssues(resolvedResult.data ?? []);
+    setProfiles(profilesResult.data ?? []);
   }
 
   useEffect(() => { const refresh = () => loadData(); loadData(); window.addEventListener("penn:issues-changed", refresh); return () => window.removeEventListener("penn:issues-changed", refresh); }, []);
@@ -75,7 +78,7 @@ export default function IssuesDashboard({ onOpenProduct }) {
     const product = products.find((item) => item.code.toLowerCase() === form.productCode.trim().toLowerCase());
     if (!product) { setMessage("Informe um código de produto válido."); return; }
     setSubmitting(true); setMessage("");
-    const { data, error } = await supabase.from("product_issues").insert({ product_id: product.id, product_code: product.code, description: form.description.trim(), priority: form.priority, due_date: form.dueDate, assignee_name:form.assigneeName.trim()||null, assignee_email:form.assigneeEmail.trim()||null }).select("id, product_id, product_code, description, priority, due_date, created_at").single();
+    const assignee=profiles.find(profile=>profile.full_name===form.assigneeName); const { data, error } = await supabase.from("product_issues").insert({ product_id: product.id, product_code: product.code, description: form.description.trim(), priority: form.priority, due_date: form.dueDate, assignee_name:assignee?.full_name||null, assignee_email:assignee?.email||null }).select("*").single();
     if (error) { setMessage(`Não foi possível registrar: ${error.message}`); setSubmitting(false); return; }
     await supabase.from("products").update({ status: "manutencao" }).eq("id", product.id);
     setIssues((current) => [data, ...current]);
@@ -99,7 +102,7 @@ export default function IssuesDashboard({ onOpenProduct }) {
           <label className="issue-description-field">Descrição da pendência<textarea minLength="10" required rows="3" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Descreva claramente a pendência encontrada (mínimo de 10 caracteres)..."/></label>
           <label>Prazo para resolução<input required type="date" value={form.dueDate} onChange={(event) => setForm({ ...form, dueDate: event.target.value })}/></label>
           <label>Prioridade<select value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })}>{Object.entries(priorityMeta).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}</select></label>
-          <label>Responsável<input value={form.assigneeName} onChange={event=>setForm({...form,assigneeName:event.target.value})} placeholder="Nome do responsável"/></label><label>E-mail do responsável<input type="email" value={form.assigneeEmail} onChange={event=>setForm({...form,assigneeEmail:event.target.value})} placeholder="usuario@empresa.com"/></label>
+          <label>Responsável<select required value={form.assigneeName} onChange={event=>setForm({...form,assigneeName:event.target.value})}><option value="">Selecione pelo nome</option>{profiles.map(profile=><option key={profile.id} value={profile.full_name}>{profile.full_name}</option>)}</select></label>
           <div className="issue-form-action"><button disabled={submitting}><IssueIcon name="plus"/>{submitting ? "Registrando..." : "Registrar problema"}</button></div>
         </form>
         {message && <p className={message.includes("sucesso") ? "issue-form-message success" : "issue-form-message"}>{message}</p>}

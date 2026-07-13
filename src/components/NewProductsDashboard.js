@@ -82,9 +82,10 @@ export default function NewProductsDashboard({ onOpenProducts }) {
   const [editingProject, setEditingProject] = useState(false);
   const [projectEdit, setProjectEdit] = useState({});
   const [workspaceView, setWorkspaceView] = useState("portfolio");
+  const [userProfiles,setUserProfiles]=useState([]);
 
   async function loadWorkflow() {
-    const [productsResult, projectsResult, tasksResult, attachmentsResult, historyResult, packagesResult, quotationItemsResult, projectHistoryResult] = await Promise.all([
+    const [productsResult, projectsResult, tasksResult, attachmentsResult, historyResult, packagesResult, quotationItemsResult, projectHistoryResult, profilesResult] = await Promise.all([
       supabase.from("products").select("id, code, name, category, owner").order("code"),
       supabase.from("product_development_projects").select("*").order("created_at", { ascending: false }),
       supabase.from("product_development_tasks").select("*").order("sort_order"),
@@ -93,12 +94,14 @@ export default function NewProductsDashboard({ onOpenProducts }) {
       supabase.from("quotation_packages").select("*").order("created_at", { ascending: false }),
       supabase.from("quotation_package_items").select("*").order("created_at"),
       supabase.from("product_development_project_history").select("*").order("changed_at",{ascending:false}),
+      supabase.from("user_profiles").select("id,full_name,email").order("full_name"),
     ]);
     if (projectsResult.error || tasksResult.error) { setMessage(`Execute o SQL do fluxo de desenvolvimento: ${projectsResult.error?.message ?? tasksResult.error?.message}`); }
     setProducts(productsResult.data ?? []); setProjects(projectsResult.data ?? []); setTasks(tasksResult.data ?? []);
     setTaskAttachments(attachmentsResult.data ?? []); setLaunchHistory(historyResult.data ?? []);
     setQuotationPackages(packagesResult.data ?? []); setQuotationItems(quotationItemsResult.data ?? []);
     setProjectHistory(projectHistoryResult.data??[]);
+    setUserProfiles(profilesResult.data??[]);
   }
 
   useEffect(() => { loadWorkflow(); }, []);
@@ -138,7 +141,7 @@ export default function NewProductsDashboard({ onOpenProducts }) {
     window.dispatchEvent(new CustomEvent("penn:tasks-changed"));
   }
 
-  async function assignTask(task){const name=window.prompt("Nome do responsável:",task.assignee_name||"");if(name===null)return;const email=window.prompt("E-mail do responsável:",task.assignee_email||"");if(email===null)return;const dueDate=window.prompt("Prazo da tarefa (AAAA-MM-DD):",task.due_date||"");if(dueDate===null)return;const{data,error}=await supabase.from("product_development_tasks").update({assignee_name:name.trim()||null,assignee_email:email.trim()||null,due_date:dueDate.trim()||null}).eq("id",task.id).select("*").single();if(error){setMessage(error.message);return;}setTasks(current=>current.map(item=>item.id===task.id?data:item));window.dispatchEvent(new CustomEvent("penn:tasks-changed"));setMessage("Responsável e prazo da tarefa atualizados.");}
+  async function assignTask(task){const available=userProfiles.map(profile=>profile.full_name).filter(Boolean).join(", ");const name=window.prompt(`Nome do responsável cadastrado:\n${available}`,task.assignee_name||"");if(name===null)return;const profile=userProfiles.find(item=>item.full_name?.toLowerCase()===name.trim().toLowerCase());if(!profile){setMessage("Selecione um nome existente no cadastro de usuários.");return;}const dueDate=window.prompt("Prazo da tarefa (AAAA-MM-DD):",task.due_date||"");if(dueDate===null)return;const{data,error}=await supabase.from("product_development_tasks").update({assignee_name:profile.full_name,assignee_email:profile.email,due_date:dueDate.trim()||null}).eq("id",task.id).select("*").single();if(error){setMessage(error.message);return;}setTasks(current=>current.map(item=>item.id===task.id?data:item));window.dispatchEvent(new CustomEvent("penn:tasks-changed"));setMessage("Responsável e prazo da tarefa atualizados.");}
 
   async function saveTaskNote(task) {
     const notes = taskNotes[task.id] ?? task.notes ?? "";

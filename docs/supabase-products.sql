@@ -278,6 +278,17 @@ create table if not exists public.supplier_materials (
   primary key (supplier_id, raw_material_id)
 );
 
+create table if not exists public.personal_tasks (
+  id bigint primary key generated always as identity,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  title text not null check (length(trim(title)) >= 3),
+  description text,
+  due_date date,
+  priority text not null default 'media' check (priority in ('baixa','media','alta','critica')),
+  completed_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
 -- Base consolidada para recomendações e priorização estratégica de NPI.
 create table if not exists public.product_strategic_profiles (
   id bigint primary key generated always as identity,
@@ -344,6 +355,7 @@ alter table public.user_profiles enable row level security;
 alter table public.suppliers enable row level security;
 alter table public.supplier_products enable row level security;
 alter table public.supplier_materials enable row level security;
+alter table public.personal_tasks enable row level security;
 
 grant select, insert, delete on public.product_structure_items to anon;
 grant select, insert, update, delete on public.product_issues to anon;
@@ -520,6 +532,7 @@ grant select, insert, update, delete on public.product_development_tasks to auth
 grant select on public.product_structure_items, public.raw_materials to authenticated;
 grant select, insert, update on public.user_profiles to authenticated;
 grant select, insert, update, delete on public.suppliers, public.supplier_products, public.supplier_materials to authenticated;
+grant select, insert, update, delete on public.personal_tasks to authenticated;
 grant select on public.ncm_taxes to authenticated;
 grant select, insert, delete on public.product_structure_items, public.product_attachments, public.product_development_task_attachments to authenticated;
 grant select, insert, update, delete on public.product_budget_items, public.raw_materials, public.product_categories, public.quotation_packages, public.quotation_package_items, public.product_strategic_profiles to authenticated;
@@ -535,6 +548,7 @@ drop policy if exists "profiles_authenticated" on public.user_profiles;
 drop policy if exists "suppliers_authenticated" on public.suppliers;
 drop policy if exists "supplier_products_authenticated" on public.supplier_products;
 drop policy if exists "supplier_materials_authenticated" on public.supplier_materials;
+drop policy if exists "personal_tasks_own" on public.personal_tasks;
 create policy "products_authenticated" on public.products for all to authenticated using (true) with check (true);
 create policy "issues_authenticated" on public.product_issues for all to authenticated using (true) with check (true);
 create policy "projects_authenticated" on public.product_development_projects for all to authenticated using (true) with check (true);
@@ -545,6 +559,7 @@ create policy "profiles_authenticated" on public.user_profiles for all to authen
 create policy "suppliers_authenticated" on public.suppliers for all to authenticated using (true) with check (true);
 create policy "supplier_products_authenticated" on public.supplier_products for all to authenticated using (true) with check (true);
 create policy "supplier_materials_authenticated" on public.supplier_materials for all to authenticated using (true) with check (true);
+create policy "personal_tasks_own" on public.personal_tasks for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
 drop policy if exists "ncm_authenticated" on public.ncm_taxes;
 drop policy if exists "attachments_authenticated" on public.product_attachments;
 drop policy if exists "task_attachments_authenticated" on public.product_development_task_attachments;
