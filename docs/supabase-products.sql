@@ -202,6 +202,12 @@ create table if not exists public.quotation_package_items (
   created_at timestamptz not null default now()
 );
 
+alter table public.quotation_packages
+add column if not exists include_in_total boolean not null default false;
+
+alter table public.quotation_package_items
+add column if not exists sap_code text;
+
 -- Base consolidada para recomendações e priorização estratégica de NPI.
 create table if not exists public.product_strategic_profiles (
   id bigint primary key generated always as identity,
