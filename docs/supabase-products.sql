@@ -208,6 +208,24 @@ add column if not exists include_in_total boolean not null default false;
 alter table public.quotation_package_items
 add column if not exists sap_code text;
 
+alter table public.quotation_package_items add column if not exists currency text not null default 'BRL';
+alter table public.quotation_package_items add column if not exists exchange_rate numeric not null default 1;
+alter table public.quotation_package_items add column if not exists ncm text;
+alter table public.quotation_package_items add column if not exists apply_ipi boolean not null default false;
+alter table public.quotation_package_items add column if not exists apply_pis boolean not null default false;
+alter table public.quotation_package_items add column if not exists apply_cofins boolean not null default false;
+alter table public.quotation_package_items add column if not exists apply_icms boolean not null default false;
+alter table public.quotation_package_items add column if not exists apply_import_tax boolean not null default false;
+
+create table if not exists public.product_development_project_history (
+  id bigint primary key generated always as identity,
+  project_id bigint not null references public.product_development_projects(id) on delete cascade,
+  field_name text not null,
+  old_value text,
+  new_value text,
+  changed_at timestamptz not null default now()
+);
+
 -- Base consolidada para recomendações e priorização estratégica de NPI.
 create table if not exists public.product_strategic_profiles (
   id bigint primary key generated always as identity,
@@ -269,6 +287,7 @@ alter table public.quotation_packages enable row level security;
 alter table public.quotation_package_items enable row level security;
 alter table public.product_strategic_profiles enable row level security;
 alter table public.product_strategic_history enable row level security;
+alter table public.product_development_project_history enable row level security;
 
 grant select, insert, delete on public.product_structure_items to anon;
 grant select, insert, update, delete on public.product_issues to anon;
@@ -286,6 +305,7 @@ grant select, insert, update, delete on public.quotation_packages to anon;
 grant select, insert, update, delete on public.quotation_package_items to anon;
 grant select, insert, update, delete on public.product_strategic_profiles to anon;
 grant select, insert on public.product_strategic_history to anon;
+grant select, insert on public.product_development_project_history to anon;
 
 drop policy if exists "ncm_taxes_select" on public.ncm_taxes;
 drop policy if exists "product_structure_items_select" on public.product_structure_items;
@@ -314,6 +334,7 @@ drop policy if exists "quotation_packages_all" on public.quotation_packages;
 drop policy if exists "quotation_package_items_all" on public.quotation_package_items;
 drop policy if exists "product_strategic_profiles_all" on public.product_strategic_profiles;
 drop policy if exists "product_strategic_history_all" on public.product_strategic_history;
+drop policy if exists "development_project_history_all" on public.product_development_project_history;
 
 create policy "ncm_taxes_select"
 on public.ncm_taxes
@@ -421,3 +442,4 @@ create policy "quotation_packages_all" on public.quotation_packages for all to a
 create policy "quotation_package_items_all" on public.quotation_package_items for all to anon using (true) with check (true);
 create policy "product_strategic_profiles_all" on public.product_strategic_profiles for all to anon using (true) with check (true);
 create policy "product_strategic_history_all" on public.product_strategic_history for all to anon using (true) with check (true);
+create policy "development_project_history_all" on public.product_development_project_history for all to anon using (true) with check (true);
