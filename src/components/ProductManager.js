@@ -679,6 +679,7 @@ export default function ProductManager() {
     }
 
     setResolvingIssueId(null);
+    window.dispatchEvent(new CustomEvent("penn:issues-changed"));
     showSuccess("Problema resolvido.");
   }
 

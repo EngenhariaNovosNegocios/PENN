@@ -24,16 +24,19 @@ function IssueIcon({ name }) {
 export default function IssuesDashboard({ onOpenProduct }) {
   const [products, setProducts] = useState([]);
   const [issues, setIssues] = useState([]);
+  const [resolvedIssues, setResolvedIssues] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [loadingError, setLoadingError] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("todos");
+  const [showHistory, setShowHistory] = useState(false);
 
   async function loadData() {
-    const [productsResult, issuesResult] = await Promise.all([
+    const [productsResult, issuesResult, resolvedResult] = await Promise.all([
       supabase.from("products").select("id, code, name, status").order("code"),
       supabase.from("product_issues").select("id, product_id, product_code, description, priority, due_date, created_at").is("resolved_at", null).order("created_at", { ascending: false }),
+      supabase.from("product_issues").select("id, product_id, product_code, description, priority, due_date, created_at, resolved_at, resolution_note").not("resolved_at", "is", null).order("resolved_at", { ascending: false }),
     ]);
     if (productsResult.error || issuesResult.error) {
       setLoadingError(
@@ -46,9 +49,26 @@ export default function IssuesDashboard({ onOpenProduct }) {
     setLoadingError("");
     setProducts(productsResult.data ?? []);
     setIssues(issuesResult.data ?? []);
+    setResolvedIssues(resolvedResult.data ?? []);
   }
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { const refresh = () => loadData(); loadData(); window.addEventListener("penn:issues-changed", refresh); return () => window.removeEventListener("penn:issues-changed", refresh); }, []);
+
+  async function resolveIssue(issue) {
+    const note = window.prompt("Descreva como a pendência foi resolvida (mínimo de 10 caracteres):");
+    if (!note?.trim() || note.trim().length < 10) { setMessage("A resolução precisa ter pelo menos 10 caracteres."); return; }
+    const resolvedAt = new Date().toISOString();
+    const { data, error } = await supabase.from("product_issues").update({ resolution_note: note.trim(), resolved_at: resolvedAt }).eq("id", issue.id).select("id, product_id, product_code, description, priority, due_date, created_at, resolved_at, resolution_note").single();
+    if (error) { setMessage(`Não foi possível resolver: ${error.message}`); return; }
+    setIssues((current) => current.filter((item) => item.id !== issue.id));
+    setResolvedIssues((current) => [data, ...current]);
+    if (!issues.some((item) => item.product_id === issue.product_id && item.id !== issue.id)) {
+      await supabase.from("products").update({ status: "ativo" }).eq("id", issue.product_id);
+      setProducts((current) => current.map((product) => product.id === issue.product_id ? { ...product, status: "ativo" } : product));
+    }
+    window.dispatchEvent(new CustomEvent("penn:issues-changed"));
+    setMessage("Pendência resolvida e movida para o histórico.");
+  }
 
   async function registerIssue(event) {
     event.preventDefault();
@@ -86,7 +106,7 @@ export default function IssuesDashboard({ onOpenProduct }) {
 
       <section className="issues-board">
         {loadingError && <div className="issues-load-error"><span>{loadingError}</span><button onClick={loadData}>Tentar novamente</button></div>}
-        <header><div><span className="panel-kicker">Visão por produto</span><h2>Pendências abertas</h2></div><div className="priority-filters"><button className={priorityFilter === "todos" ? "active" : ""} onClick={() => setPriorityFilter("todos")}>Todos</button>{Object.entries(priorityMeta).map(([value, meta]) => <button className={priorityFilter === value ? "active" : ""} key={value} onClick={() => setPriorityFilter(value)}>{meta.label}</button>)}</div></header>
+        <header><div><span className="panel-kicker">Visão por produto</span><h2>Pendências abertas</h2></div><div className="issues-board-actions"><button className="history-toggle" onClick={() => setShowHistory(!showHistory)}>{showHistory ? "Ocultar histórico" : `Histórico resolvido (${resolvedIssues.length})`}</button><div className="priority-filters"><button className={priorityFilter === "todos" ? "active" : ""} onClick={() => setPriorityFilter("todos")}>Todos</button>{Object.entries(priorityMeta).map(([value, meta]) => <button className={priorityFilter === value ? "active" : ""} key={value} onClick={() => setPriorityFilter(value)}>{meta.label}</button>)}</div></div></header>
         <div className="issue-groups">
           {groups.map(({ product, issues: productIssues }) => (
             <article className="issue-product-group" key={product.id}>
@@ -95,11 +115,12 @@ export default function IssuesDashboard({ onOpenProduct }) {
                 <div><strong>{product.code}</strong><h3>{product.name}</h3></div>
                 <span>{productIssues.length} {productIssues.length === 1 ? "pendência" : "pendências"}</span>
               </header>
-              <div>{productIssues.map((issue, index) => { const isOverdue = issue.due_date && new Date(`${issue.due_date}T23:59:59`) < new Date(); return <div className="global-issue-row" key={issue.id}><span className="issue-order">{String(index + 1).padStart(2,"0")}</span><div><strong>{issue.description}</strong><span><i className={`priority-dot ${priorityMeta[issue.priority]?.className || "medium"}`}/>{priorityMeta[issue.priority]?.label || "Média"}</span></div><span className={isOverdue ? "issue-deadline overdue" : "issue-deadline"}><IssueIcon name="calendar"/>{issue.due_date ? new Date(`${issue.due_date}T12:00:00`).toLocaleDateString("pt-BR") : "Sem prazo"}</span></div>})}</div>
+              <div>{productIssues.map((issue, index) => { const isOverdue = issue.due_date && new Date(`${issue.due_date}T23:59:59`) < new Date(); return <div className="global-issue-row" key={issue.id}><span className="issue-order">{String(index + 1).padStart(2,"0")}</span><div><strong>{issue.description}</strong><span><i className={`priority-dot ${priorityMeta[issue.priority]?.className || "medium"}`}/>{priorityMeta[issue.priority]?.label || "Média"}</span></div><span className={isOverdue ? "issue-deadline overdue" : "issue-deadline"}><IssueIcon name="calendar"/>{issue.due_date ? new Date(`${issue.due_date}T12:00:00`).toLocaleDateString("pt-BR") : "Sem prazo"}</span><button className="resolve-issue-button" onClick={() => resolveIssue(issue)}>Resolver</button></div>})}</div>
             </article>
           ))}
           {groups.length === 0 && <div className="issues-empty"><IssueIcon name="alert"/><strong>Nenhuma pendência encontrada</strong><span>Não há ocorrências abertas com este filtro.</span></div>}
         </div>
+        {showHistory && <section className="resolved-issues-history"><header><div><span className="panel-kicker">Memória do produto</span><h2>Pendências resolvidas</h2></div><span>{resolvedIssues.length} registros</span></header><div>{resolvedIssues.map((issue) => { const product = products.find((item) => item.id === issue.product_id); return <article key={issue.id}><span className="resolved-check">✓</span><div><strong>{issue.description}</strong><small>{product?.code || issue.product_code} · {product?.name || "Produto"}</small><p>{issue.resolution_note}</p></div><time>{new Date(issue.resolved_at).toLocaleString("pt-BR")}</time></article>})}{resolvedIssues.length === 0 && <div className="issues-empty"><strong>Nenhuma pendência resolvida</strong><span>As resoluções aparecerão aqui automaticamente.</span></div>}</div></section>}
       </section>
     </main>
   );
