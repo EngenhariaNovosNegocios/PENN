@@ -290,6 +290,19 @@ create table if not exists public.supplier_materials (
   primary key (supplier_id, raw_material_id)
 );
 
+create table if not exists public.supplier_material_attachments (
+  id bigint primary key generated always as identity,
+  supplier_id bigint not null,
+  raw_material_id bigint not null,
+  name text not null,
+  storage_path text not null unique,
+  public_url text not null,
+  created_at timestamptz not null default now(),
+  foreign key (supplier_id, raw_material_id)
+    references public.supplier_materials(supplier_id, raw_material_id)
+    on delete cascade
+);
+
 create table if not exists public.personal_tasks (
   id bigint primary key generated always as identity,
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -368,6 +381,7 @@ alter table public.suppliers enable row level security;
 alter table public.supplier_products enable row level security;
 alter table public.supplier_materials enable row level security;
 alter table public.supplier_contacts enable row level security;
+alter table public.supplier_material_attachments enable row level security;
 alter table public.personal_tasks enable row level security;
 
 grant select, insert, delete on public.product_structure_items to anon;
@@ -392,6 +406,7 @@ grant select, insert, update, delete on public.suppliers to anon;
 grant select, insert, update, delete on public.supplier_products to anon;
 grant select, insert, update, delete on public.supplier_materials to anon;
 grant select, insert, update, delete on public.supplier_contacts to anon;
+grant select, insert, delete on public.supplier_material_attachments to anon;
 
 drop policy if exists "ncm_taxes_select" on public.ncm_taxes;
 drop policy if exists "product_structure_items_select" on public.product_structure_items;
@@ -426,6 +441,7 @@ drop policy if exists "suppliers_all" on public.suppliers;
 drop policy if exists "supplier_products_all" on public.supplier_products;
 drop policy if exists "supplier_materials_all" on public.supplier_materials;
 drop policy if exists "supplier_contacts_all" on public.supplier_contacts;
+drop policy if exists "supplier_material_attachments_all" on public.supplier_material_attachments;
 
 create policy "ncm_taxes_select"
 on public.ncm_taxes
@@ -539,6 +555,7 @@ create policy "suppliers_all" on public.suppliers for all to anon using (true) w
 create policy "supplier_products_all" on public.supplier_products for all to anon using (true) with check (true);
 create policy "supplier_materials_all" on public.supplier_materials for all to anon using (true) with check (true);
 create policy "supplier_contacts_all" on public.supplier_contacts for all to anon using (true) with check (true);
+create policy "supplier_material_attachments_all" on public.supplier_material_attachments for all to anon using (true) with check (true);
 
 -- Acesso equivalente para usuários autenticados; substituir por regras por função/área na implantação.
 grant select, update on public.products to authenticated;
@@ -548,6 +565,7 @@ grant select, insert, update, delete on public.product_development_tasks to auth
 grant select on public.product_structure_items, public.raw_materials to authenticated;
 grant select, insert, update on public.user_profiles to authenticated;
 grant select, insert, update, delete on public.suppliers, public.supplier_products, public.supplier_materials, public.supplier_contacts to authenticated;
+grant select, insert, delete on public.supplier_material_attachments to authenticated;
 grant select, insert, update, delete on public.personal_tasks to authenticated;
 grant select on public.ncm_taxes to authenticated;
 grant select, insert, delete on public.product_structure_items, public.product_attachments, public.product_development_task_attachments to authenticated;
@@ -565,6 +583,7 @@ drop policy if exists "suppliers_authenticated" on public.suppliers;
 drop policy if exists "supplier_products_authenticated" on public.supplier_products;
 drop policy if exists "supplier_materials_authenticated" on public.supplier_materials;
 drop policy if exists "supplier_contacts_authenticated" on public.supplier_contacts;
+drop policy if exists "supplier_material_attachments_authenticated" on public.supplier_material_attachments;
 drop policy if exists "personal_tasks_own" on public.personal_tasks;
 create policy "products_authenticated" on public.products for all to authenticated using (true) with check (true);
 create policy "issues_authenticated" on public.product_issues for all to authenticated using (true) with check (true);
@@ -577,6 +596,7 @@ create policy "suppliers_authenticated" on public.suppliers for all to authentic
 create policy "supplier_products_authenticated" on public.supplier_products for all to authenticated using (true) with check (true);
 create policy "supplier_materials_authenticated" on public.supplier_materials for all to authenticated using (true) with check (true);
 create policy "supplier_contacts_authenticated" on public.supplier_contacts for all to authenticated using (true) with check (true);
+create policy "supplier_material_attachments_authenticated" on public.supplier_material_attachments for all to authenticated using (true) with check (true);
 create policy "personal_tasks_own" on public.personal_tasks for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
 drop policy if exists "ncm_authenticated" on public.ncm_taxes;
 drop policy if exists "attachments_authenticated" on public.product_attachments;

@@ -71,6 +71,7 @@ export default function OverviewDashboard({ onOpenProducts, onOpenIssues }) {
   return (
     <main className="overview-page">
       <section className="overview-hero">
+        <div className="safesoft-watermark" aria-hidden="true"><span>SAFE</span><strong>SOFT</strong></div>
         <div><span className="overview-kicker">Painel operacional</span><h1>Visão geral</h1><p>Uma leitura rápida da saúde do portfólio, qualidade dos cadastros e pendências da engenharia.</p></div>
         <div className="health-orbit" style={{ "--health": `${healthyRate * 3.6}deg` }}><div><strong>{healthyRate}%</strong><span>portfólio ativo</span></div></div>
       </section>
