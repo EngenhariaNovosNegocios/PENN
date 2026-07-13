@@ -31,7 +31,7 @@ export default function IssuesDashboard({ onOpenProduct }) {
   const [message, setMessage] = useState("");
   const [loadingError, setLoadingError] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("todos");
-  const [showHistory, setShowHistory] = useState(false);
+  const [boardView, setBoardView] = useState("active");
 
   async function loadData() {
     const [productsResult, issuesResult, resolvedResult, profilesResult] = await Promise.all([
@@ -100,9 +100,9 @@ export default function IssuesDashboard({ onOpenProduct }) {
         <form onSubmit={registerIssue}>
           <label>Código do produto<input list="product-codes" required value={form.productCode} onChange={(event) => setForm({ ...form, productCode: event.target.value })} placeholder="Ex.: PENN-001"/><datalist id="product-codes">{products.map((product) => <option key={product.id} value={product.code}>{product.name}</option>)}</datalist></label>
           <label className="issue-description-field">Descrição da pendência<textarea minLength="10" required rows="3" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Descreva claramente a pendência encontrada (mínimo de 10 caracteres)..."/></label>
-          <label>Prazo para resolução<input required type="date" value={form.dueDate} onChange={(event) => setForm({ ...form, dueDate: event.target.value })}/></label>
-          <label>Prioridade<select value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })}>{Object.entries(priorityMeta).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}</select></label>
-          <label>Responsável<select required value={form.assigneeName} onChange={event=>setForm({...form,assigneeName:event.target.value})}><option value="">Selecione pelo nome</option>{profiles.map(profile=><option key={profile.id} value={profile.full_name}>{profile.full_name}</option>)}</select></label>
+          <label className="issue-assignee-field">Responsável<select required value={form.assigneeName} onChange={event=>setForm({...form,assigneeName:event.target.value})}><option value="">Selecione pelo nome</option>{profiles.map(profile=><option key={profile.id} value={profile.full_name}>{profile.full_name}</option>)}</select></label>
+          <label className="issue-due-field">Prazo para resolução<input required type="date" value={form.dueDate} onChange={(event) => setForm({ ...form, dueDate: event.target.value })}/></label>
+          <label className="issue-priority-field">Prioridade<select value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })}>{Object.entries(priorityMeta).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}</select></label>
           <div className="issue-form-action"><button disabled={submitting}><IssueIcon name="plus"/>{submitting ? "Registrando..." : "Registrar problema"}</button></div>
         </form>
         {message && <p className={message.includes("sucesso") ? "issue-form-message success" : "issue-form-message"}>{message}</p>}
@@ -110,7 +110,8 @@ export default function IssuesDashboard({ onOpenProduct }) {
 
       <section className="issues-board">
         {loadingError && <div className="issues-load-error"><span>{loadingError}</span><button onClick={loadData}>Tentar novamente</button></div>}
-        <header><div><span className="panel-kicker">Visão por produto</span><h2>Pendências abertas</h2></div><div className="issues-board-actions"><button className="history-toggle" onClick={() => setShowHistory(!showHistory)}>{showHistory ? "Ocultar histórico" : `Histórico resolvido (${resolvedIssues.length})`}</button><div className="priority-filters"><button className={priorityFilter === "todos" ? "active" : ""} onClick={() => setPriorityFilter("todos")}>Todos</button>{Object.entries(priorityMeta).map(([value, meta]) => <button className={priorityFilter === value ? "active" : ""} key={value} onClick={() => setPriorityFilter(value)}>{meta.label}</button>)}</div></div></header>
+        <nav className="issues-section-tabs"><button className={boardView==="active"?"active":""} onClick={()=>setBoardView("active")}>Pendências abertas <b>{issues.length}</b></button><button className={boardView==="history"?"active":""} onClick={()=>setBoardView("history")}>Histórico resolvido <b>{resolvedIssues.length}</b></button></nav>
+        {boardView==="active"&&<><header><div><span className="panel-kicker">Visão por produto</span><h2>Pendências abertas</h2></div><div className="issues-board-actions"><div className="priority-filters"><button className={priorityFilter === "todos" ? "active" : ""} onClick={() => setPriorityFilter("todos")}>Todos</button>{Object.entries(priorityMeta).map(([value, meta]) => <button className={priorityFilter === value ? "active" : ""} key={value} onClick={() => setPriorityFilter(value)}>{meta.label}</button>)}</div></div></header>
         <div className="issue-groups">
           {groups.map(({ product, issues: productIssues }) => (
             <article className="issue-product-group" key={product.id}>
@@ -123,8 +124,8 @@ export default function IssuesDashboard({ onOpenProduct }) {
             </article>
           ))}
           {groups.length === 0 && <div className="issues-empty"><IssueIcon name="alert"/><strong>Nenhuma pendência encontrada</strong><span>Não há ocorrências abertas com este filtro.</span></div>}
-        </div>
-        {showHistory && <section className="resolved-issues-history"><header><div><span className="panel-kicker">Memória do produto</span><h2>Pendências resolvidas</h2></div><span>{resolvedIssues.length} registros</span></header><div>{resolvedIssues.map((issue) => { const product = products.find((item) => item.id === issue.product_id); return <article key={issue.id}><span className="resolved-check">✓</span><div><strong>{issue.description}</strong><small>{product?.code || issue.product_code} · {product?.name || "Produto"}</small><p>{issue.resolution_note}</p></div><time>{new Date(issue.resolved_at).toLocaleString("pt-BR")}</time></article>})}{resolvedIssues.length === 0 && <div className="issues-empty"><strong>Nenhuma pendência resolvida</strong><span>As resoluções aparecerão aqui automaticamente.</span></div>}</div></section>}
+        </div></>}
+        {boardView==="history"&&<section className="resolved-issues-history"><header><div><span className="panel-kicker">Memória do produto</span><h2>Pendências resolvidas</h2></div><span>{resolvedIssues.length} registros</span></header><div>{resolvedIssues.map((issue) => { const product = products.find((item) => item.id === issue.product_id); return <article key={issue.id}><span className="resolved-check">✓</span><div><strong>{issue.description}</strong><small>{product?.code || issue.product_code} · {product?.name || "Produto"}</small><p>{issue.resolution_note}</p></div><time>{new Date(issue.resolved_at).toLocaleString("pt-BR")}</time></article>})}{resolvedIssues.length === 0 && <div className="issues-empty"><strong>Nenhuma pendência resolvida</strong><span>As resoluções aparecerão aqui automaticamente.</span></div>}</div></section>}
       </section>
     </main>
   );
