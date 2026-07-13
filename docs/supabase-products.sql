@@ -111,6 +111,9 @@ create table if not exists public.product_development_tasks (
   created_at timestamptz not null default now()
 );
 
+alter table public.product_development_projects
+add column if not exists archived_at timestamptz;
+
 create table if not exists public.product_budget_items (
   id bigint primary key generated always as identity,
   product_id bigint not null references public.products(id) on delete cascade,
@@ -199,6 +202,41 @@ create table if not exists public.quotation_package_items (
   created_at timestamptz not null default now()
 );
 
+-- Base consolidada para recomendações e priorização estratégica de NPI.
+create table if not exists public.product_strategic_profiles (
+  id bigint primary key generated always as identity,
+  product_id bigint not null unique references public.products(id) on delete cascade,
+  application text,
+  compatibility text,
+  annual_sales numeric check (annual_sales is null or annual_sales >= 0),
+  stock_quantity numeric check (stock_quantity is null or stock_quantity >= 0),
+  minimum_stock numeric check (minimum_stock is null or minimum_stock >= 0),
+  unit_cost numeric check (unit_cost is null or unit_cost >= 0),
+  sale_price numeric check (sale_price is null or sale_price >= 0),
+  lead_time_days integer check (lead_time_days is null or lead_time_days >= 0),
+  supplier_name text,
+  supplier_country text,
+  single_source boolean not null default false,
+  certification_status text not null default 'not_required' check (certification_status in ('not_required','pending','valid','expired')),
+  certification_expiry date,
+  competitor_name text,
+  competitor_price numeric check (competitor_price is null or competitor_price >= 0),
+  lifecycle_status text not null default 'active' check (lifecycle_status in ('development','active','phase_out','discontinued')),
+  known_risks text,
+  strategic_notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.product_strategic_history (
+  id bigint primary key generated always as identity,
+  product_id bigint not null references public.products(id) on delete cascade,
+  event_type text not null,
+  description text not null,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
 alter table public.product_budget_items drop constraint if exists product_budget_items_quantity_check;
 alter table public.product_budget_items add constraint product_budget_items_quantity_check check (quantity > 0);
 alter table public.product_budget_items drop constraint if exists product_budget_items_unit_type_check;
@@ -223,6 +261,8 @@ alter table public.product_development_task_attachments enable row level securit
 alter table public.product_launch_date_history enable row level security;
 alter table public.quotation_packages enable row level security;
 alter table public.quotation_package_items enable row level security;
+alter table public.product_strategic_profiles enable row level security;
+alter table public.product_strategic_history enable row level security;
 
 grant select, insert, delete on public.product_structure_items to anon;
 grant select, insert, update, delete on public.product_issues to anon;
@@ -238,6 +278,8 @@ grant select, insert, delete on public.product_development_task_attachments to a
 grant select, insert on public.product_launch_date_history to anon;
 grant select, insert, update, delete on public.quotation_packages to anon;
 grant select, insert, update, delete on public.quotation_package_items to anon;
+grant select, insert, update, delete on public.product_strategic_profiles to anon;
+grant select, insert on public.product_strategic_history to anon;
 
 drop policy if exists "ncm_taxes_select" on public.ncm_taxes;
 drop policy if exists "product_structure_items_select" on public.product_structure_items;
@@ -264,6 +306,8 @@ drop policy if exists "development_task_attachments_all" on public.product_devel
 drop policy if exists "launch_date_history_all" on public.product_launch_date_history;
 drop policy if exists "quotation_packages_all" on public.quotation_packages;
 drop policy if exists "quotation_package_items_all" on public.quotation_package_items;
+drop policy if exists "product_strategic_profiles_all" on public.product_strategic_profiles;
+drop policy if exists "product_strategic_history_all" on public.product_strategic_history;
 
 create policy "ncm_taxes_select"
 on public.ncm_taxes
@@ -369,3 +413,5 @@ create policy "development_task_attachments_all" on public.product_development_t
 create policy "launch_date_history_all" on public.product_launch_date_history for all to anon using (true) with check (true);
 create policy "quotation_packages_all" on public.quotation_packages for all to anon using (true) with check (true);
 create policy "quotation_package_items_all" on public.quotation_package_items for all to anon using (true) with check (true);
+create policy "product_strategic_profiles_all" on public.product_strategic_profiles for all to anon using (true) with check (true);
+create policy "product_strategic_history_all" on public.product_strategic_history for all to anon using (true) with check (true);
