@@ -99,9 +99,7 @@ const tabs = [
   { id: "structure", label: "Estrutura", icon: "structure" },
   { id: "issues", label: "Pendências", icon: "issues" },
   { id: "fiscal", label: "Fiscal", icon: "fiscal" },
-  { id: "budget", label: "Orçamento", icon: "budget" },
-  { id: "documents", label: "Documentos", icon: "documents" },
-  { id: "photos", label: "Fotos", icon: "photos" },
+  { id: "files", label: "Arquivos", icon: "documents" },
 ];
 
 function ActionIcon({ name }) {
@@ -169,6 +167,7 @@ export default function ProductManager() {
   const [rawMaterialForm, setRawMaterialForm] = useState(emptyRawMaterial);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [createStep, setCreateStep] = useState("essential");
 
   useEffect(() => {
     async function loadProducts() {
@@ -449,6 +448,7 @@ export default function ProductManager() {
     setActiveTab("overview");
     setViewMode("catalog");
     setForm(emptyForm);
+    setCreateStep("essential");
     setIsSubmitting(false);
     showSuccess("Produto cadastrado.");
   }
@@ -1288,7 +1288,7 @@ export default function ProductManager() {
                 </section>
               )}
 
-              {activeTab === "documents" && (
+              {activeTab === "files" && (
                 <section className="tab-panel" aria-label="Documentos do produto">
                   <form className="attachment-form" onSubmit={(event) => uploadAttachment(event, "document")}>
                     <label>Tipo de documento
@@ -1315,7 +1315,7 @@ export default function ProductManager() {
                 </section>
               )}
 
-              {activeTab === "photos" && (
+              {activeTab === "files" && (
                 <section className="tab-panel" aria-label="Fotos do produto">
                   <form className="attachment-form photo-upload" onSubmit={(event) => uploadAttachment(event, "photo")}>
                     <label>Foto do produto
@@ -1343,7 +1343,16 @@ export default function ProductManager() {
       )}
 
       {viewMode === "materials" && (
-        <section className="materials-manager panel"><div className="panel-heading"><div><span className="form-step">Cadastro mestre</span><h2>Códigos de matéria-prima</h2></div><span>{rawMaterials.length} códigos</span></div><form className="materials-form" onSubmit={addRawMaterial}><label>Código<input required value={rawMaterialForm.code} onChange={(e)=>setRawMaterialForm({...rawMaterialForm,code:e.target.value})} placeholder="Ex.: MP-0001" /></label><label>Descrição<input required value={rawMaterialForm.name} onChange={(e)=>setRawMaterialForm({...rawMaterialForm,name:e.target.value})} placeholder="Ex.: Chapa inox 2mm" /></label><label>Unidade<select value={rawMaterialForm.unitType} onChange={(e)=>setRawMaterialForm({...rawMaterialForm,unitType:e.target.value})}>{["UN","PC","KIT","CX","KG","M","L","H"].map((unit)=><option key={unit}>{unit}</option>)}</select></label><button>Cadastrar matéria-prima</button></form><div className="materials-grid">{rawMaterials.map((material)=><article key={material.id}><span className="material-code">{material.code}</span><div><strong>{material.name}</strong><small>{material.unit_type} · {material.is_provisional ? "Provisório" : "Código oficial"}</small></div></article>)}</div></section>
+        <section className="materials-manager panel">
+          <div className="panel-heading"><div><span className="form-step">Cadastro mestre</span><h2>Códigos de matéria-prima</h2></div><span>{rawMaterials.length} códigos</span></div>
+          <form className="materials-form" onSubmit={addRawMaterial}>
+            <label>Código<input required value={rawMaterialForm.code} onChange={(e)=>setRawMaterialForm({...rawMaterialForm,code:e.target.value})} placeholder="Ex.: MP-0001" /></label>
+            <label>Descrição<input required value={rawMaterialForm.name} onChange={(e)=>setRawMaterialForm({...rawMaterialForm,name:e.target.value})} placeholder="Ex.: Chapa inox 2mm" /></label>
+            <label>Unidade<select value={rawMaterialForm.unitType} onChange={(e)=>setRawMaterialForm({...rawMaterialForm,unitType:e.target.value})}>{["UN","PC","KIT","CX","KG","M","L","H"].map((unit)=><option key={unit}>{unit}</option>)}</select></label>
+            <button>Cadastrar matéria-prima</button>
+          </form>
+          <div className="materials-grid">{rawMaterials.map((material)=><article key={material.id}><a className="material-code material-code-link" href={`/materias-primas/${material.id}`} title="Ver histórico de cotações">{material.code}</a><div><strong>{material.name}</strong><small>{material.unit_type} · {material.is_provisional ? "Provisório" : "Código oficial"}</small><a className="quotation-link" href={`/materias-primas/${material.id}`}>Ver cotações e fornecedores →</a></div></article>)}</div>
+        </section>
       )}
 
       {viewMode === "suppliers" && <SupplierDashboard />}
@@ -1353,25 +1362,19 @@ export default function ProductManager() {
         <div className="panel-heading">
           <div>
             <span className="form-step">Novo cadastro</span>
-            <h2>Informações do produto</h2>
+            <h2>Novo produto</h2>
           </div>
           <span>Campos com * são obrigatórios</span>
         </div>
 
-        <form className="product-form" onSubmit={addProduct}>
+        <nav className="create-product-tabs" aria-label="Etapas do cadastro">
+          <button className={createStep === "essential" ? "active" : ""} onClick={() => setCreateStep("essential")} type="button"><strong>1. Essencial</strong><small>Identificação e responsável</small></button>
+          <button className={createStep === "classification" ? "active" : ""} onClick={() => setCreateStep("classification")} type="button"><strong>2. Classificação</strong><small>Status, características e NCM</small></button>
+        </nav>
+        <form className="product-form simplified-product-form" onSubmit={addProduct}>
+          {createStep === "essential" && <>
           <label>
-            Nome do produto
-            <input
-              name="name"
-              onChange={updateField}
-              placeholder="Ex.: Conjunto mecanico especial"
-              required
-              value={form.name}
-            />
-          </label>
-
-          <label>
-            Codigo
+            Código *
             <input
               name="code"
               onChange={updateField}
@@ -1380,6 +1383,26 @@ export default function ProductManager() {
               value={form.code}
             />
           </label>
+
+          <label>
+            Nome do produto *
+            <input
+              name="name"
+              onChange={updateField}
+              placeholder="Ex.: Conjunto mecânico especial"
+              required
+              value={form.name}
+            />
+          </label>
+
+          <label className="compact-create-field">
+            Responsável
+            <input name="owner" onChange={updateField} placeholder="Ex.: Engenharia" value={form.owner}/>
+          </label>
+          <div className="create-step-hint"><strong>Cadastro rápido</strong><span>Classificação e dados fiscais podem ser preenchidos agora ou editados depois.</span><button type="button" onClick={() => setCreateStep("classification")}>Continuar para classificação →</button></div>
+          </>}
+
+          {createStep === "classification" && <>
 
           <label>
             Categoria
@@ -1397,17 +1420,7 @@ export default function ProductManager() {
             />
           </label>
 
-          <label>
-            Responsavel
-            <input
-              name="owner"
-              onChange={updateField}
-              placeholder="Ex.: Engenharia"
-              value={form.owner}
-            />
-          </label>
-
-          <label>
+          <label className="compact-create-field">
             Status
             <select name="status" onChange={updateField} value={form.status}>
               {Object.entries(statusOptions).map(([value, option]) => (
@@ -1428,6 +1441,7 @@ export default function ProductManager() {
               value={form.characteristics}
             />
           </label>
+          </>}
 
           <div className="form-actions">
             <button disabled={isSubmitting} type="submit">
