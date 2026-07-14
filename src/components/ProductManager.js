@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import SupplierDashboard from "@/components/SupplierDashboard";
+import SpreadsheetImport from "@/components/SpreadsheetImport";
 
 const statusOptions = {
   ativo: {
@@ -838,6 +839,7 @@ export default function ProductManager() {
         </button>
         <button className={viewMode === "materials" ? "active" : ""} onClick={() => setViewMode("materials")} type="button"><span className="workspace-tab-icon">MP</span><span><strong>Matérias-primas</strong><small>Cadastro mestre de códigos</small></span></button>
         <button className={viewMode === "suppliers" ? "active" : ""} onClick={() => setViewMode("suppliers")} type="button"><span className="workspace-tab-icon">SRM</span><span><strong>Fornecedores</strong><small>Produtos, materiais e relacionamento</small></span></button>
+        <button className={viewMode === "import" ? "active" : ""} onClick={() => setViewMode("import")} type="button"><span className="workspace-tab-icon">CSV</span><span><strong>Importar planilha</strong><small>Produtos, matérias-primas e estrutura</small></span></button>
         {selectedProduct && viewMode === "detail" && (
           <button
             className={viewMode === "detail" ? "active contextual-tab" : "contextual-tab"}
@@ -1356,6 +1358,8 @@ export default function ProductManager() {
       )}
 
       {viewMode === "suppliers" && <SupplierDashboard />}
+
+      {viewMode === "import" && <SpreadsheetImport onImported={() => window.setTimeout(() => window.location.reload(), 900)} />}
 
       {viewMode === "create" && (
       <section className="panel form-panel">

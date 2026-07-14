@@ -1,6 +1,10 @@
 alter table public.products
 add column if not exists ncm text;
 
+-- Necessário para importação idempotente: o mesmo código atualiza o cadastro existente.
+create unique index if not exists products_code_unique_idx
+on public.products (code);
+
 -- O cadastro passa a ser mantido manualmente, sem campos de integracao SAP.
 alter table public.products drop column if exists sap_material_code;
 alter table public.products drop column if exists sap_plant;
@@ -400,7 +404,7 @@ alter table public.personal_tasks enable row level security;
 grant select, insert, delete on public.product_structure_items to anon;
 grant select, insert, update, delete on public.product_issues to anon;
 grant select on public.ncm_taxes to anon;
-grant update, delete on public.products to anon;
+grant select, insert, update, delete on public.products to anon;
 grant select, insert, delete on public.product_attachments to anon;
 grant select, insert, update, delete on public.product_development_projects to anon;
 grant select, insert, update, delete on public.product_development_tasks to anon;
@@ -431,6 +435,7 @@ drop policy if exists "product_issues_insert" on public.product_issues;
 drop policy if exists "product_issues_update" on public.product_issues;
 drop policy if exists "product_issues_delete" on public.product_issues;
 drop policy if exists "products_update_status" on public.products;
+drop policy if exists "products_insert" on public.products;
 drop policy if exists "products_delete" on public.products;
 drop policy if exists "product_attachments_select" on public.product_attachments;
 drop policy if exists "product_attachments_insert" on public.product_attachments;
@@ -514,6 +519,12 @@ to anon
 using (true)
 with check (true);
 
+create policy "products_insert"
+on public.products
+for insert
+to anon
+with check (true);
+
 create policy "products_delete"
 on public.products
 for delete
@@ -574,7 +585,7 @@ create policy "supplier_material_attachments_all" on public.supplier_material_at
 create policy "supplier_material_quotations_all" on public.supplier_material_quotations for all to anon using (true) with check (true);
 
 -- Acesso equivalente para usuários autenticados; substituir por regras por função/área na implantação.
-grant select, update on public.products to authenticated;
+grant select, insert, update, delete on public.products to authenticated;
 grant select, insert, update, delete on public.product_issues to authenticated;
 grant select, insert, update, delete on public.product_development_projects to authenticated;
 grant select, insert, update, delete on public.product_development_tasks to authenticated;
