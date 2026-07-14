@@ -57,11 +57,14 @@ export default function SpreadsheetImport({ onImported }) {
   const [errors, setErrors] = useState([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [ignoreDuplicates, setIgnoreDuplicates] = useState(false);
 
   const validRows = useMemo(() => rows.filter(row => !row.errors.length), [rows]);
+  const duplicateRows = useMemo(() => rows.filter(row => row.errors.length > 0 && row.errors.every(error => error === "código duplicado no arquivo")), [rows]);
+  const blockingRows = useMemo(() => rows.filter(row => row.errors.length > 0 && !(ignoreDuplicates && row.errors.every(error => error === "código duplicado no arquivo"))), [rows, ignoreDuplicates]);
 
   async function readFile(file) {
-    setMessage(""); setRows([]); setErrors([]); setFileName(file?.name || "");
+    setMessage(""); setRows([]); setErrors([]); setIgnoreDuplicates(false); setFileName(file?.name || "");
     if (!file) return;
     if (!file.name.toLowerCase().endsWith(".csv")) { setErrors(["Salve a aba do Excel como CSV UTF-8 antes de importar."]); return; }
     const matrix = parseCsv(await file.text());
@@ -93,7 +96,7 @@ export default function SpreadsheetImport({ onImported }) {
   }
 
   async function importData() {
-    if (!validRows.length || !window.confirm(`Confirmar a importação de ${validRows.length} registro(s)?`)) return;
+    if (!validRows.length || blockingRows.length > 0 || !window.confirm(`Confirmar a importação de ${validRows.length} registro(s)${ignoreDuplicates && duplicateRows.length ? ` e ignorar ${duplicateRows.length} duplicado(s)` : ""}?`)) return;
     setBusy(true); setMessage(""); setErrors([]);
     try {
       if (type === "products") {
@@ -118,17 +121,17 @@ export default function SpreadsheetImport({ onImported }) {
         if (unresolved.length) { setErrors(unresolved); setBusy(false); return; }
         for (const batch of batches(payload)) { const { error } = await supabase.from("product_structure_items").insert(batch); if (error) throw error; }
       }
-      setMessage(`${validRows.length} registro(s) importados com sucesso.`); setRows([]); setFileName(""); onImported?.();
+      setMessage(`${validRows.length} registro(s) importados com sucesso.${ignoreDuplicates && duplicateRows.length ? ` ${duplicateRows.length} duplicado(s) foram desconsiderados.` : ""}`); setRows([]); setFileName(""); onImported?.();
     } catch (error) { setErrors([error.message || "Não foi possível concluir a importação."]); }
     setBusy(false);
   }
 
   return <section className="spreadsheet-import panel">
     <header><div><span>Importação assistida</span><h2>Carregar dados por planilha</h2><p>Exporte cada aba do Excel como CSV UTF-8. Nada será gravado antes da confirmação.</p></div><div className="import-safety"><strong>Prévia segura</strong><small>Validação de códigos e duplicidades</small></div></header>
-    <nav>{Object.entries(TYPES).map(([key,config]) => <button className={type===key?"active":""} key={key} onClick={()=>{setType(key);setRows([]);setErrors([]);setFileName("")}} type="button">{config.label}</button>)}</nav>
+    <nav>{Object.entries(TYPES).map(([key,config]) => <button className={type===key?"active":""} key={key} onClick={()=>{setType(key);setRows([]);setErrors([]);setIgnoreDuplicates(false);setFileName("")}} type="button">{config.label}</button>)}</nav>
     <div className="import-drop"><label><strong>Selecionar arquivo CSV</strong><span>{fileName || "Arraste ou escolha o arquivo exportado do Excel"}</span><input accept=".csv,text/csv" type="file" onChange={event=>readFile(event.target.files?.[0])}/></label><aside><strong>Colunas esperadas</strong><code>{TYPES[type].fields.join(" · ")}</code></aside></div>
     {errors.length>0&&<div className="import-errors"><strong>Importação bloqueada</strong>{errors.slice(0,8).map((error,index)=><span key={index}>{error}</span>)}{errors.length>8&&<small>+ {errors.length-8} outros erros</small>}</div>}
     {message&&<p className="import-success">{message}</p>}
-    {rows.length>0&&<><div className="import-summary"><article><strong>{rows.length}</strong><span>linhas lidas</span></article><article className="success"><strong>{validRows.length}</strong><span>prontas</span></article><article className="danger"><strong>{rows.length-validRows.length}</strong><span>com erro</span></article><button disabled={busy||!validRows.length||rows.length!==validRows.length} onClick={importData}>{busy?"Importando...":`Confirmar ${validRows.length} registro(s)`}</button></div><div className="import-preview"><table><thead><tr><th>Linha</th><th>Ação</th>{TYPES[type].fields.map(field=><th key={field}>{field}</th>)}<th>Validação</th></tr></thead><tbody>{rows.slice(0,100).map(row=><tr className={row.errors.length?"invalid":""} key={row.line}><td>{row.line}</td><td><b className={`import-action ${row.action?.toLowerCase()}`}>{row.action}</b></td>{TYPES[type].fields.map(field=><td key={field}>{row.data[field]||"—"}</td>)}<td>{row.errors.length?row.errors.join("; "):"Pronto"}</td></tr>)}</tbody></table></div></>}
+    {rows.length>0&&<>{duplicateRows.length>0&&<label className="ignore-duplicates"><input checked={ignoreDuplicates} onChange={event=>setIgnoreDuplicates(event.target.checked)} type="checkbox"/><span><strong>Desconsiderar itens duplicados</strong><small>Ignorar {duplicateRows.length} ocorrência(s) repetida(s) e importar somente a primeira de cada código.</small></span></label>}<div className="import-summary"><article><strong>{rows.length}</strong><span>linhas lidas</span></article><article className="success"><strong>{validRows.length}</strong><span>prontas</span></article><article className={blockingRows.length?"danger":"ignored"}><strong>{ignoreDuplicates?blockingRows.length:rows.length-validRows.length}</strong><span>{ignoreDuplicates?"erros bloqueantes":"com erro"}</span></article><button disabled={busy||!validRows.length||blockingRows.length>0} onClick={importData}>{busy?"Importando...":`Confirmar ${validRows.length} registro(s)`}</button></div><div className="import-preview"><table><thead><tr><th>Linha</th><th>Ação</th>{TYPES[type].fields.map(field=><th key={field}>{field}</th>)}<th>Validação</th></tr></thead><tbody>{rows.slice(0,100).map(row=>{const ignored=ignoreDuplicates&&row.errors.length>0&&row.errors.every(error=>error==="código duplicado no arquivo");return <tr className={ignored?"ignored":row.errors.length?"invalid":""} key={row.line}><td>{row.line}</td><td><b className={`import-action ${(ignored?"ignorar":row.action)?.toLowerCase()}`}>{ignored?"Ignorar":row.action}</b></td>{TYPES[type].fields.map(field=><td key={field}>{row.data[field]||"—"}</td>)}<td>{ignored?"Será desconsiderado":row.errors.length?row.errors.join("; "):"Pronto"}</td></tr>})}</tbody></table></div></>}
   </section>;
 }
