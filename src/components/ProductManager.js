@@ -89,6 +89,7 @@ const documentTypes = [
   "Datasheet",
   "Manual do usuário",
   "NPI",
+  "Foto do produto",
 ];
 
 const ncmTaxColumns =
@@ -152,6 +153,7 @@ export default function ProductManager() {
   const [activeTab, setActiveTab] = useState("overview");
   const [viewMode, setViewMode] = useState("catalog");
   const [searchTerm, setSearchTerm] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
@@ -161,7 +163,6 @@ export default function ProductManager() {
   const [resolutionNotes, setResolutionNotes] = useState({});
   const [documentType, setDocumentType] = useState(documentTypes[0]);
   const [documentFile, setDocumentFile] = useState(null);
-  const [photoFile, setPhotoFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [budgetItem, setBudgetItem] = useState(emptyBudgetItem);
   const [isSavingBudget, setIsSavingBudget] = useState(false);
@@ -364,9 +365,10 @@ export default function ProductManager() {
     const query = searchTerm.trim().toLowerCase();
 
     return products.filter((product) =>
-      !query || product.code?.toLowerCase().includes(query)
+      (!query || product.code?.toLowerCase().includes(query) || product.name?.toLowerCase().includes(query)) &&
+      (!categoryFilter || product.category === categoryFilter)
     );
-  }, [products, searchTerm]);
+  }, [products, searchTerm, categoryFilter]);
 
   function showSuccess(message) {
     setSuccessMessage(message);
@@ -742,10 +744,11 @@ export default function ProductManager() {
     setStructureItems((current) => current.map((structureItem) => structureItem.id === item.structure_item_id ? { ...structureItem, material_code: normalizedCode } : structureItem)); setBudgetItems((current) => current.map((currentItem) => currentItem.id === item.id ? updated : currentItem)); await loadRawMaterials(); showSuccess("Código definitivo aplicado à estrutura.");
   }
 
-  async function uploadAttachment(event, kind) {
+  async function uploadAttachment(event) {
     event.preventDefault();
     const formElement = event.currentTarget;
-    const file = kind === "photo" ? photoFile : documentFile;
+    const file = documentFile;
+    const kind = documentType === "Foto do produto" ? "photo" : "document";
 
     if (!selectedProduct || !file) {
       setErrorMessage("Selecione um arquivo antes de enviar.");
@@ -793,7 +796,7 @@ export default function ProductManager() {
     }
 
     setAttachments((current) => [data, ...current]);
-    kind === "photo" ? setPhotoFile(null) : setDocumentFile(null);
+    setDocumentFile(null);
     formElement.reset();
     setIsUploading(false);
     showSuccess(kind === "photo" ? "Foto adicionada." : "Documento anexado.");
@@ -823,6 +826,9 @@ export default function ProductManager() {
             operacionais de cada produto.
           </p>
         </div>
+        <div className="page-header-actions">
+          <button title="Importar planilha" aria-label="Importar planilha" onClick={() => setViewMode("import")} type="button">⇧<span>Importar</span></button>
+        </div>
       </header>
 
       <nav className={`workspace-tabs ${viewMode === "detail" ? "has-context" : ""}`} aria-label="Áreas de produtos">
@@ -839,7 +845,6 @@ export default function ProductManager() {
         </button>
         <button className={viewMode === "materials" ? "active" : ""} onClick={() => setViewMode("materials")} type="button"><span className="workspace-tab-icon">MP</span><span><strong>Matérias-primas</strong><small>Cadastro mestre de códigos</small></span></button>
         <button className={viewMode === "suppliers" ? "active" : ""} onClick={() => setViewMode("suppliers")} type="button"><span className="workspace-tab-icon">SRM</span><span><strong>Fornecedores</strong><small>Produtos, materiais e relacionamento</small></span></button>
-        <button className={viewMode === "import" ? "active" : ""} onClick={() => setViewMode("import")} type="button"><span className="workspace-tab-icon">CSV</span><span><strong>Importar planilha</strong><small>Produtos, matérias-primas e estrutura</small></span></button>
         {selectedProduct && viewMode === "detail" && (
           <button
             className={viewMode === "detail" ? "active contextual-tab" : "contextual-tab"}
@@ -853,17 +858,6 @@ export default function ProductManager() {
             </span>
           </button>
         )}
-        <button
-          className={viewMode === "create" ? "active" : ""}
-          onClick={() => setViewMode("create")}
-          type="button"
-        >
-          <span className="workspace-tab-icon">＋</span>
-          <span>
-            <strong>Adicionar produto</strong>
-            <small>Criar um novo cadastro</small>
-          </span>
-        </button>
       </nav>
 
       {(errorMessage || successMessage) && (
@@ -891,15 +885,20 @@ export default function ProductManager() {
             <span className="issue-overview">
               <strong>{issues.length}</strong> pendências abertas
             </span>
+            <button className="compact-add-product" onClick={() => setViewMode("create")} type="button">+ Produto</button>
           </div>
 
           <div className="list-controls">
             <input
               onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Buscar código..."
+              placeholder="Buscar código ou nome..."
               type="search"
               value={searchTerm}
             />
+            <select aria-label="Filtrar por categoria" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
+              <option value="">Todas as categorias</option>
+              {productCategories.map((category) => <option key={category.id} value={category.name}>{category.name}</option>)}
+            </select>
           </div>
 
           <div className="product-list-items">
@@ -1292,21 +1291,21 @@ export default function ProductManager() {
 
               {activeTab === "files" && (
                 <section className="tab-panel" aria-label="Documentos do produto">
-                  <form className="attachment-form" onSubmit={(event) => uploadAttachment(event, "document")}>
+                  <form className="attachment-form" onSubmit={uploadAttachment}>
                     <label>Tipo de documento
                       <select value={documentType} onChange={(event) => setDocumentType(event.target.value)}>
                         {documentTypes.map((type) => <option key={type} value={type}>{type}</option>)}
                       </select>
                     </label>
                     <label>Arquivo
-                      <input required type="file" onChange={(event) => setDocumentFile(event.target.files?.[0] ?? null)} />
+                      <input accept={documentType === "Foto do produto" ? "image/*" : undefined} required type="file" onChange={(event) => setDocumentFile(event.target.files?.[0] ?? null)} />
                     </label>
                     <button disabled={isUploading} type="submit"><ActionIcon name="plus" />{isUploading ? "Enviando..." : "Anexar arquivo"}</button>
                   </form>
                   <div className="attachment-list">
                     {selectedDocuments.map((item) => (
                       <article className="attachment-row" key={item.id}>
-                        <span className="file-symbol"><ActionIcon name="documents" /></span>
+                        <span className="file-symbol">{item.name.match(/\.(png|jpe?g|webp|gif)$/i) ? <img alt="" src={item.public_url} /> : <ActionIcon name="documents" />}</span>
                         <span><strong>{item.name}</strong><small>{item.file_type}</small></span>
                         <a href={item.public_url} rel="noreferrer" target="_blank"><ActionIcon name="download" />Abrir</a>
                         <button className="attachment-delete" onClick={() => deleteAttachment(item)} type="button"><ActionIcon name="trash" />Excluir</button>
@@ -1319,12 +1318,6 @@ export default function ProductManager() {
 
               {activeTab === "files" && (
                 <section className="tab-panel" aria-label="Fotos do produto">
-                  <form className="attachment-form photo-upload" onSubmit={(event) => uploadAttachment(event, "photo")}>
-                    <label>Foto do produto
-                      <input accept="image/*" required type="file" onChange={(event) => setPhotoFile(event.target.files?.[0] ?? null)} />
-                    </label>
-                    <button disabled={isUploading} type="submit"><ActionIcon name="plus" />{isUploading ? "Enviando..." : "Adicionar foto"}</button>
-                  </form>
                   <div className="photo-grid">
                     {selectedPhotos.map((item) => (
                       <article className="photo-card" key={item.id}>
@@ -1353,7 +1346,7 @@ export default function ProductManager() {
             <label>Unidade<select value={rawMaterialForm.unitType} onChange={(e)=>setRawMaterialForm({...rawMaterialForm,unitType:e.target.value})}>{["UN","PC","KIT","CX","KG","M","L","H"].map((unit)=><option key={unit}>{unit}</option>)}</select></label>
             <button>Cadastrar matéria-prima</button>
           </form>
-          <div className="materials-grid">{rawMaterials.map((material)=><article key={material.id}><a className="material-code material-code-link" href={`/materias-primas/${material.id}`} title="Ver histórico de cotações">{material.code}</a><div><strong>{material.name}</strong><small>{material.unit_type} · {material.is_provisional ? "Provisório" : "Código oficial"}</small><a className="quotation-link" href={`/materias-primas/${material.id}`}>Ver cotações e fornecedores →</a></div></article>)}</div>
+          <div className="materials-grid">{rawMaterials.map((material)=><article key={material.id}><a className="material-code material-code-link" href={`/materias-primas/${material.id}`} title="Ver histórico de cotações">{material.code}</a><div><strong>{material.name}</strong><small>{material.unit_type} · {material.is_provisional ? "Provisório" : "Código oficial"}</small></div><button className="material-edit-code" title="Editar código" aria-label={`Editar código ${material.code}`} onClick={async()=>{const code=window.prompt("Novo código da matéria-prima:",material.code)?.trim().toUpperCase();if(!code||code===material.code)return;const{data,error}=await supabase.from("raw_materials").update({code}).eq("id",material.id).select("id, code, name, unit_type, is_provisional, created_at").single();if(error){setErrorMessage(error.message);return}setRawMaterials(current=>current.map(item=>item.id===material.id?data:item));showSuccess("Código atualizado.")}} type="button"><ActionIcon name="edit" /></button></article>)}</div>
         </section>
       )}
 
