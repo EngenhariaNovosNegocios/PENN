@@ -659,3 +659,100 @@ create policy "quotation_items_authenticated" on public.quotation_package_items 
 create policy "strategic_profiles_authenticated" on public.product_strategic_profiles for all to authenticated using (true) with check (true);
 create policy "strategic_history_authenticated" on public.product_strategic_history for all to authenticated using (true) with check (true);
 create policy "project_history_authenticated" on public.product_development_project_history for all to authenticated using (true) with check (true);
+
+-- Controle de acesso global do portal.
+create table if not exists public.authorized_users (
+  id bigint primary key generated always as identity,
+  full_name text not null,
+  email text not null unique check (email = lower(email)),
+  area text,
+  role text not null default 'colaborador' check (role in ('colaborador','gerente','admin')),
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.authorized_users enable row level security;
+
+insert into public.authorized_users (email, full_name, role, active)
+select
+  lower(email),
+  coalesce(raw_user_meta_data->>'full_name', split_part(email, '@', 1)),
+  'admin',
+  true
+from auth.users
+where email is not null
+  and not exists (select 1 from public.authorized_users)
+order by created_at
+limit 1
+on conflict (email) do nothing;
+
+-- Se o projeto ainda nao tiver usuarios em auth.users, cadastre o primeiro
+-- admin manualmente antes de usar a tela "Acessos":
+-- insert into public.authorized_users (email, full_name, role, active)
+-- values ('seu.email@empresa.com', 'Seu Nome', 'admin', true)
+-- on conflict (email) do update set full_name = excluded.full_name, role = 'admin', active = true;
+
+create or replace function public.is_authorized_user(user_email text)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1
+    from public.authorized_users
+    where email = lower(trim(user_email))
+      and active = true
+  );
+$$;
+
+create or replace function public.current_user_access_role()
+returns text
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select coalesce(
+    (
+      select role
+      from public.authorized_users
+      where email = lower(auth.jwt()->>'email')
+        and active = true
+      limit 1
+    ),
+    ''
+  );
+$$;
+
+grant execute on function public.is_authorized_user(text) to anon, authenticated;
+grant execute on function public.current_user_access_role() to authenticated;
+grant select, insert, update on public.authorized_users to authenticated;
+
+drop policy if exists "authorized_users_select" on public.authorized_users;
+drop policy if exists "authorized_users_insert" on public.authorized_users;
+drop policy if exists "authorized_users_update" on public.authorized_users;
+
+create policy "authorized_users_select"
+on public.authorized_users
+for select
+to authenticated
+using (
+  email = lower(auth.jwt()->>'email')
+  or public.current_user_access_role() in ('gerente','admin')
+);
+
+create policy "authorized_users_insert"
+on public.authorized_users
+for insert
+to authenticated
+with check (public.current_user_access_role() in ('gerente','admin'));
+
+create policy "authorized_users_update"
+on public.authorized_users
+for update
+to authenticated
+using (public.current_user_access_role() in ('gerente','admin'))
+with check (public.current_user_access_role() in ('gerente','admin'));

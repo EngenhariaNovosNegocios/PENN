@@ -7,7 +7,9 @@ export default function LoginGate({ children }) {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
+  const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [recoveryMode, setRecoveryMode] = useState(false);
@@ -16,7 +18,7 @@ export default function LoginGate({ children }) {
   useEffect(() => {
     async function loadSession() {
       const { data } = await supabase.auth.getSession();
-      setSession(data.session);
+      await acceptSession(data.session);
       setLoading(false);
     }
 
@@ -24,7 +26,7 @@ export default function LoginGate({ children }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, nextSession) => {
+    } = supabase.auth.onAuthStateChange(async (event, nextSession) => {
       if (event === "PASSWORD_RECOVERY") {
         setRecoveryMode(true);
         setSession(null);
@@ -32,28 +34,80 @@ export default function LoginGate({ children }) {
         return;
       }
 
-      setSession(nextSession);
+      await acceptSession(nextSession);
       setLoading(false);
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
+  async function isAuthorizedEmail(userEmail) {
+    const { data, error } = await supabase.rpc("is_authorized_user", {
+      user_email: userEmail.trim().toLowerCase(),
+    });
+
+    if (error) {
+      setMessage(
+        "Nao foi possivel validar o acesso. Execute o SQL atualizado no Supabase."
+      );
+      return false;
+    }
+
+    return Boolean(data);
+  }
+
   async function syncProfile(user) {
     if (!user?.email) {
-      return;
+      return false;
+    }
+
+    const normalizedEmail = user.email.toLowerCase();
+    const { data: authorizedUser } = await supabase
+      .from("authorized_users")
+      .select("full_name, email, area, role")
+      .eq("email", normalizedEmail)
+      .eq("active", true)
+      .maybeSingle();
+
+    if (!authorizedUser) {
+      return false;
     }
 
     await supabase.from("user_profiles").upsert(
       {
         id: user.id,
-        email: user.email,
+        email: normalizedEmail,
         full_name:
-          user.user_metadata?.full_name ?? user.email.split("@")[0] ?? "Usuario",
+          authorizedUser.full_name ??
+          user.user_metadata?.full_name ??
+          normalizedEmail.split("@")[0] ??
+          "Usuario",
+        area: authorizedUser.area,
+        role: authorizedUser.role,
         last_login_at: new Date().toISOString(),
       },
       { onConflict: "id" }
     );
+
+    return true;
+  }
+
+  async function acceptSession(nextSession) {
+    if (!nextSession) {
+      setSession(null);
+      return;
+    }
+
+    const isAllowed = await syncProfile(nextSession.user);
+
+    if (!isAllowed) {
+      await supabase.auth.signOut();
+      setSession(null);
+      setMessage("Este e-mail nao esta cadastrado para acessar o portal.");
+      return;
+    }
+
+    setSession(nextSession);
   }
 
   async function signIn(event) {
@@ -61,8 +115,17 @@ export default function LoginGate({ children }) {
     setSubmitting(true);
     setMessage("");
 
+    const normalizedEmail = email.trim().toLowerCase();
+    const isAllowed = await isAuthorizedEmail(normalizedEmail);
+
+    if (!isAllowed) {
+      setMessage("Este e-mail ainda nao foi cadastrado no sistema.");
+      setSubmitting(false);
+      return;
+    }
+
     const { data, error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
+      email: normalizedEmail,
       password,
     });
 
@@ -72,8 +135,52 @@ export default function LoginGate({ children }) {
       return;
     }
 
-    await syncProfile(data.user);
-    setSession(data.session);
+    await acceptSession(data.session);
+    setSubmitting(false);
+  }
+
+  async function signUp(event) {
+    event.preventDefault();
+    setSubmitting(true);
+    setMessage("");
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const isAllowed = await isAuthorizedEmail(normalizedEmail);
+
+    if (!isAllowed) {
+      setMessage(
+        "Este e-mail ainda nao foi cadastrado por alguem autorizado no sistema."
+      );
+      setSubmitting(false);
+      return;
+    }
+
+    const { data, error } = await supabase.auth.signUp({
+      email: normalizedEmail,
+      password,
+      options: {
+        data: {
+          full_name: fullName.trim(),
+        },
+      },
+    });
+
+    if (error) {
+      setMessage(`Nao foi possivel criar o acesso: ${error.message}`);
+      setSubmitting(false);
+      return;
+    }
+
+    if (data.session) {
+      await acceptSession(data.session);
+      setSubmitting(false);
+      return;
+    }
+
+    setMessage(
+      "Acesso criado. Se a confirmacao por e-mail estiver ativa, confirme antes de entrar."
+    );
+    setMode("login");
     setSubmitting(false);
   }
 
@@ -177,21 +284,60 @@ export default function LoginGate({ children }) {
         ) : (
           <>
             <div className="login-copy">
-              <span>Acesso gerencial</span>
-              <h1>Entre para acompanhar as atividades</h1>
+              <span>Acesso interno</span>
+              <h1>Entre no Portal PENN</h1>
               <p>
-                Use o usuario cadastrado no Supabase para visualizar produtos,
-                pendencias, tarefas de NPI e indicadores operacionais.
+                Use seu e-mail cadastrado para acessar os produtos, pendencias,
+                tarefas e indicadores da aplicacao.
               </p>
             </div>
 
-            <form className="login-form" onSubmit={signIn}>
+            <nav className="login-mode-tabs" aria-label="Modo de acesso">
+              <button
+                className={mode === "login" ? "active" : ""}
+                onClick={() => {
+                  setMode("login");
+                  setMessage("");
+                }}
+                type="button"
+              >
+                Entrar
+              </button>
+              <button
+                className={mode === "signup" ? "active" : ""}
+                onClick={() => {
+                  setMode("signup");
+                  setMessage("");
+                }}
+                type="button"
+              >
+                Criar primeiro acesso
+              </button>
+            </nav>
+
+            <form
+              className="login-form"
+              onSubmit={mode === "login" ? signIn : signUp}
+            >
+              {mode === "signup" && (
+                <label>
+                  Nome completo
+                  <input
+                    autoComplete="name"
+                    onChange={(event) => setFullName(event.target.value)}
+                    placeholder="Seu nome"
+                    required
+                    value={fullName}
+                  />
+                </label>
+              )}
+
               <label>
                 E-mail
                 <input
                   autoComplete="email"
                   onChange={(event) => setEmail(event.target.value)}
-                  placeholder="gerente@empresa.com"
+                  placeholder="nome@empresa.com"
                   required
                   type="email"
                   value={email}
@@ -201,11 +347,16 @@ export default function LoginGate({ children }) {
               <label>
                 Senha
                 <input
-                  autoComplete="current-password"
                   onChange={(event) => setPassword(event.target.value)}
-                  placeholder="Sua senha"
+                  placeholder={
+                    mode === "signup" ? "Minimo de 8 caracteres" : "Sua senha"
+                  }
                   required
+                  minLength={mode === "signup" ? 8 : undefined}
                   type="password"
+                  autoComplete={
+                    mode === "signup" ? "new-password" : "current-password"
+                  }
                   value={password}
                 />
               </label>
@@ -213,17 +364,25 @@ export default function LoginGate({ children }) {
               {message && <p className="login-message">{message}</p>}
 
               <button disabled={submitting} type="submit">
-                {submitting ? "Entrando..." : "Entrar"}
+                {submitting
+                  ? mode === "signup"
+                    ? "Criando..."
+                    : "Entrando..."
+                  : mode === "signup"
+                    ? "Criar acesso"
+                    : "Entrar"}
               </button>
             </form>
 
-            <button
-              className="login-reset"
-              onClick={requestPasswordReset}
-              type="button"
-            >
-              Recuperar senha
-            </button>
+            {mode === "login" && (
+              <button
+                className="login-reset"
+                onClick={requestPasswordReset}
+                type="button"
+              >
+                Recuperar senha
+              </button>
+            )}
           </>
         )}
       </section>

@@ -7,6 +7,7 @@ import IssuesDashboard from "@/components/IssuesDashboard";
 import StrategicIntelligenceDashboard from "@/components/StrategicIntelligenceDashboard";
 import UserProfileDashboard from "@/components/UserProfileDashboard";
 import ManagerActivityDashboard from "@/components/ManagerActivityDashboard";
+import AccessManagementDashboard from "@/components/AccessManagementDashboard";
 import { supabase } from "@/lib/supabaseClient";
 
 const pageTitles = {
@@ -16,8 +17,38 @@ const pageTitles = {
   intelligence: "Inteligencia NPI",
   issues: "Pendencias",
   manager: "Gerencia",
+  access: "Acessos",
   profile: "Minhas tarefas",
 };
+
+function getInitials(nameOrEmail) {
+  const value = nameOrEmail || "Usuario";
+  const parts = value.split(/[.\s@_-]+/).filter(Boolean);
+  return (parts[0]?.[0] ?? "U") + (parts[1]?.[0] ?? "");
+}
+
+async function getPortalIdentity(user) {
+  const email = user?.email?.toLowerCase() ?? "";
+
+  if (!email) {
+    return { email: "", name: "Equipe PENN" };
+  }
+
+  const { data } = await supabase
+    .from("authorized_users")
+    .select("full_name,email")
+    .eq("email", email)
+    .maybeSingle();
+
+  return {
+    email,
+    name:
+      data?.full_name ||
+      user.user_metadata?.full_name ||
+      email.split("@")[0] ||
+      "Usuario",
+  };
+}
 
 const Icon = ({ name }) => {
   const paths = {
@@ -98,6 +129,14 @@ const Icon = ({ name }) => {
         <path d="M18 6h4v4" />
       </>
     ),
+    users: (
+      <>
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M22 21v-2a4 4 0 0 0-3-3.9" />
+        <path d="M16 3.1a4 4 0 0 1 0 7.8" />
+      </>
+    ),
     menu: <path d="M4 6h16M4 12h16M4 18h16" />,
     close: <path d="m6 6 12 12M18 6 6 18" />,
   };
@@ -125,6 +164,7 @@ const navigation = [
   { id: "intelligence", label: "Inteligencia NPI", icon: "brain" },
   { id: "issues", label: "Pendencias", icon: "alert" },
   { id: "manager", label: "Gerencia", icon: "manager" },
+  { id: "access", label: "Acessos", icon: "users" },
   { label: "Indicadores", icon: "chart", disabled: true },
   { label: "Relatorios", icon: "file", disabled: true },
 ];
@@ -136,16 +176,14 @@ export default function AppShell({ children }) {
   const [overdueTasks, setOverdueTasks] = useState([]);
   const [profileName, setProfileName] = useState("Equipe PENN");
   const [userEmail, setUserEmail] = useState("");
+  const [onlineUsers, setOnlineUsers] = useState([]);
 
   useEffect(() => {
     async function loadNotifications() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      const name =
-        user?.user_metadata?.full_name ??
-        user?.email?.split("@")[0] ??
-        "Equipe PENN";
+      const identity = await getPortalIdentity(user);
       const today = new Date().toISOString().slice(0, 10);
       const { data } = await supabase
         .from("product_development_tasks")
@@ -153,15 +191,16 @@ export default function AppShell({ children }) {
         .lt("due_date", today)
         .not("status", "in", "(completed,not_applicable)");
 
-      setProfileName(name);
-      setUserEmail(user?.email ?? "");
+      setProfileName(identity.name);
+      setUserEmail(identity.email);
       setOverdueTasks(
         (data ?? []).filter(
           (task) =>
-            !user?.email ||
+            !identity.email ||
             (task.assignee_email ?? "").toLowerCase() ===
-              user.email.toLowerCase() ||
-            (task.assignee_name ?? "").toLowerCase() === name.toLowerCase()
+              identity.email ||
+            (task.assignee_name ?? "").toLowerCase() ===
+              identity.name.toLowerCase()
         )
       );
     }
@@ -170,6 +209,67 @@ export default function AppShell({ children }) {
     window.addEventListener("penn:tasks-changed", loadNotifications);
     return () =>
       window.removeEventListener("penn:tasks-changed", loadNotifications);
+  }, []);
+
+  useEffect(() => {
+    let channel;
+
+    async function trackPresence() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        return;
+      }
+
+      const identity = await getPortalIdentity(user);
+
+      channel = supabase.channel("penn-online-users", {
+        config: {
+          presence: {
+            key: user.id,
+          },
+        },
+      });
+
+      channel.on("presence", { event: "sync" }, () => {
+        const state = channel.presenceState();
+        const users = Object.values(state)
+          .flat()
+          .map((presence) => ({
+            id: presence.user_id,
+            email: presence.email,
+            fullName: presence.full_name,
+            onlineAt: presence.online_at,
+          }))
+          .filter((presence) => presence.id && presence.id !== user.id);
+        const uniqueUsers = Array.from(
+          new Map(users.map((presence) => [presence.id, presence])).values()
+        );
+        setOnlineUsers(uniqueUsers);
+      });
+
+      channel.subscribe(async (status) => {
+        if (status === "SUBSCRIBED") {
+          await channel.track({
+            user_id: user.id,
+            email: identity.email,
+            full_name: identity.name,
+            online_at: new Date().toISOString(),
+          });
+        }
+      });
+    }
+
+    trackPresence();
+
+    return () => {
+      if (channel) {
+        channel.untrack();
+        supabase.removeChannel(channel);
+      }
+    };
   }, []);
 
   async function signOut() {
@@ -305,6 +405,29 @@ export default function AppShell({ children }) {
             <button className="logout-button" onClick={signOut} type="button">
               Sair
             </button>
+            {onlineUsers.length > 0 && (
+              <div className="presence-stack" aria-label="Pessoas conectadas">
+                {onlineUsers.slice(0, 6).map((user) => (
+                  <span
+                    className="presence-avatar"
+                    data-name={user.fullName || user.email}
+                    key={user.id}
+                    title={user.fullName || user.email}
+                  >
+                    {getInitials(user.fullName || user.email).toUpperCase()}
+                  </span>
+                ))}
+                {onlineUsers.length > 6 && (
+                  <span
+                    className="presence-avatar more"
+                    data-name={`${onlineUsers.length - 6} pessoas a mais`}
+                    title={`${onlineUsers.length - 6} pessoas a mais`}
+                  >
+                    +{onlineUsers.length - 6}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </header>
 
@@ -358,6 +481,9 @@ export default function AppShell({ children }) {
               onOpenIssues={() => openPage("issues")}
               onOpenProducts={() => openPage("products")}
             />
+          </section>
+          <section className="app-page" hidden={activePage !== "access"}>
+            <AccessManagementDashboard />
           </section>
           <section className="app-page" hidden={activePage !== "profile"}>
             <UserProfileDashboard />
