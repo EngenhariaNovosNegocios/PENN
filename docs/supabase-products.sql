@@ -241,8 +241,17 @@ create table if not exists public.user_profiles (
   email text not null unique,
   area text,
   phone text,
+  role text not null default 'colaborador' check (role in ('colaborador','gerente','admin')),
+  last_login_at timestamptz,
   updated_at timestamptz not null default now()
 );
+
+alter table public.user_profiles
+add column if not exists role text not null default 'colaborador'
+check (role in ('colaborador','gerente','admin'));
+
+alter table public.user_profiles
+add column if not exists last_login_at timestamptz;
 
 create table if not exists public.suppliers (
   id bigint primary key generated always as identity,

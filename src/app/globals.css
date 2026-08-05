@@ -955,3 +955,421 @@ button {
 }
 /* Compact product, material and SRM controls */
 .page-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.page-header-actions button{display:flex;align-items:center;gap:6px;min-height:34px;padding:0 11px;border:1px solid #b8d5df;border-radius:8px;color:#17657a;background:#fff;font-size:.72rem;font-weight:800;cursor:pointer}.compact-add-product{min-height:30px;padding:0 10px;border:0;border-radius:7px;color:#fff;background:var(--primary);font-size:.67rem;font-weight:800;cursor:pointer}.list-controls{display:grid!important;grid-template-columns:minmax(180px,1fr) minmax(150px,.55fr);gap:8px}.list-controls select{min-width:0;padding:8px;border:1px solid var(--border);border-radius:8px;background:#fff}.materials-grid{grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:6px;padding:10px}.materials-grid article{position:relative;min-height:48px;padding:7px 9px}.material-edit-code{display:grid;place-items:center;width:28px;height:28px;margin-left:auto;border:1px solid var(--border);border-radius:7px;color:var(--primary);background:#fff;cursor:pointer}.material-edit-code .action-icon{width:14px;height:14px}.file-symbol img{width:38px;height:38px;border-radius:6px;object-fit:cover}.supplier-description{margin:8px 0 12px;padding:10px;border-radius:8px;background:#f6f8fa}.supplier-description small{color:var(--muted);font-size:.61rem}.supplier-description p{margin:4px 0 0;color:var(--text);font-size:.7rem;white-space:pre-wrap}.supplier-secondary-trigger,.material-commercial-trigger{min-height:33px;padding:0 11px;border:1px solid #b8d5df;border-radius:7px;color:#17657a;background:#f1f9fb;font-size:.65rem;font-weight:800;cursor:pointer}.supplier-secondary-trigger{margin-top:12px}.relation-add input{min-width:0;flex:1;min-height:34px;padding:8px;border:1px solid var(--border);border-radius:7px;background:#fff}.supplier-material-list>article>header{margin-bottom:0}.supplier-material-list>article>header>div{display:grid;gap:3px}.supplier-material-list>article>header>div strong{color:var(--text);font-family:inherit;font-size:.75rem}.supplier-material-list>article>header>div small{color:var(--muted);font-family:ui-monospace,monospace;font-size:.61rem}.supplier-material-list>article>header+div{margin-top:11px}
+
+/* Login and management dashboard */
+.login-screen {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 24px;
+  background:
+    linear-gradient(135deg, rgba(36, 84, 166, 0.1), transparent 34%),
+    linear-gradient(315deg, rgba(23, 101, 122, 0.12), transparent 28%),
+    var(--bg);
+}
+
+.login-card {
+  width: min(100%, 440px);
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 24px 60px rgba(23, 33, 43, 0.12);
+  padding: 28px;
+}
+
+.login-card.loading {
+  display: grid;
+  gap: 14px;
+  place-items: center;
+  min-height: 220px;
+}
+
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.login-brand-mark {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  background: var(--primary);
+  color: #ffffff;
+  font-weight: 900;
+}
+
+.login-brand strong,
+.login-brand small {
+  display: block;
+}
+
+.login-brand small,
+.login-copy p,
+.login-reset {
+  color: var(--muted);
+}
+
+.login-copy span {
+  color: var(--primary);
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.login-copy h1 {
+  margin: 8px 0;
+  font-size: 1.7rem;
+  letter-spacing: 0;
+}
+
+.login-copy p {
+  line-height: 1.55;
+  margin: 0 0 22px;
+}
+
+.login-form {
+  display: grid;
+  gap: 14px;
+}
+
+.login-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.login-form input {
+  min-height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 10px 12px;
+}
+
+.login-form button,
+.manager-hero button,
+.manager-panel header button,
+.logout-button {
+  min-height: 40px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--primary);
+  color: #ffffff;
+  font-weight: 800;
+  padding: 0 14px;
+  cursor: pointer;
+}
+
+.login-form button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.login-message {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.login-reset {
+  margin-top: 14px;
+  border: 0;
+  background: transparent;
+  font-weight: 800;
+  padding: 0;
+  cursor: pointer;
+}
+
+.logout-button {
+  min-height: 32px;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.manager-page {
+  display: grid;
+  gap: 18px;
+}
+
+.manager-hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 18px;
+  min-height: 190px;
+  border-radius: 8px;
+  background: #10243f;
+  color: #ffffff;
+  padding: 28px;
+  overflow: hidden;
+}
+
+.manager-hero span,
+.manager-panel header span {
+  font-size: 0.74rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.manager-hero h1 {
+  margin: 8px 0;
+  font-size: 2rem;
+  letter-spacing: 0;
+}
+
+.manager-hero p {
+  max-width: 680px;
+  color: rgba(255, 255, 255, 0.78);
+  line-height: 1.55;
+  margin: 0;
+}
+
+.manager-hero button {
+  background: #ffffff;
+  color: #10243f;
+  white-space: nowrap;
+}
+
+.manager-message {
+  margin: 0;
+  border: 1px solid #ffc9c0;
+  border-radius: 8px;
+  background: var(--danger-bg);
+  color: var(--danger);
+  padding: 12px 14px;
+}
+
+.manager-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.manager-kpis article,
+.manager-panel {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 12px 30px rgba(23, 33, 43, 0.05);
+}
+
+.manager-kpis article {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: center;
+  min-height: 96px;
+  padding: 16px;
+}
+
+.manager-kpi-icon,
+.project-symbol,
+.resolved-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+}
+
+.manager-kpi-icon svg,
+.manager-panel svg,
+.project-symbol svg,
+.resolved-icon svg {
+  width: 19px;
+  height: 19px;
+}
+
+.manager-kpi-icon.blue { background: var(--blue-bg); color: var(--blue-text); }
+.manager-kpi-icon.red { background: var(--danger-bg); color: var(--danger); }
+.manager-kpi-icon.violet { background: #f0edff; color: #6750a4; }
+.manager-kpi-icon.green { background: var(--green-bg); color: var(--green-text); }
+
+.manager-kpis small,
+.manager-kpis span,
+.manager-list small,
+.manager-projects small,
+.manager-resolved small,
+.manager-resolved p,
+.manager-empty {
+  color: var(--muted);
+}
+
+.manager-kpis small,
+.manager-kpis span {
+  display: block;
+}
+
+.manager-kpis strong {
+  display: block;
+  margin: 2px 0;
+  font-size: 1.6rem;
+}
+
+.manager-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.manager-panel {
+  padding: 18px;
+}
+
+.manager-panel header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.manager-panel h2 {
+  margin: 4px 0 0;
+  font-size: 1.08rem;
+}
+
+.manager-panel header button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  color: var(--primary);
+}
+
+.manager-list,
+.manager-projects,
+.manager-resolved {
+  display: grid;
+  gap: 8px;
+}
+
+.manager-list button,
+.manager-list > div,
+.manager-projects button,
+.manager-resolved > div {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 62px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  color: var(--text);
+  padding: 12px;
+  text-align: left;
+}
+
+.manager-list button.overdue,
+.manager-list > div.overdue {
+  border-color: #ffc9c0;
+  background: var(--danger-bg);
+}
+
+.manager-priority,
+.task-status {
+  min-width: 82px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 900;
+  padding: 6px 8px;
+  text-align: center;
+}
+
+.manager-priority.critica,
+.task-status.blocked {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.manager-priority.alta,
+.task-status.pending {
+  background: var(--amber-bg);
+  color: var(--amber-text);
+}
+
+.manager-priority.media,
+.task-status.in_progress {
+  background: var(--blue-bg);
+  color: var(--blue-text);
+}
+
+.manager-priority.baixa {
+  background: var(--green-bg);
+  color: var(--green-text);
+}
+
+.manager-list strong,
+.manager-list small,
+.manager-projects strong,
+.manager-projects small,
+.manager-resolved strong,
+.manager-resolved small {
+  display: block;
+}
+
+.manager-list time,
+.manager-projects time,
+.manager-resolved time {
+  color: var(--muted);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.project-symbol {
+  background: var(--blue-bg);
+  color: var(--blue-text);
+}
+
+.resolved-icon {
+  background: var(--green-bg);
+  color: var(--green-text);
+}
+
+.manager-resolved p {
+  margin: 5px 0 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.manager-empty {
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  margin: 0;
+  padding: 16px;
+}
+
+@media (max-width: 1000px) {
+  .manager-kpis,
+  .manager-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .manager-hero,
+  .manager-panel header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .manager-kpis,
+  .manager-grid,
+  .manager-list button,
+  .manager-list > div,
+  .manager-projects button,
+  .manager-resolved > div {
+    grid-template-columns: 1fr;
+  }
+}
