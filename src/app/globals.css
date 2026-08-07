@@ -74,8 +74,9 @@ body {
 .nav-item { position: relative; display: grid; grid-template-columns: 20px minmax(0,1fr) auto; align-items: center; column-gap: 13px; width: 100%; min-height: 45px; padding: 0 12px; border: 0; border-radius: 10px; color: #a9bad0; background: transparent; text-align: left; transition: .18s ease; }
 .nav-item:not(:disabled):hover { color: #fff; background: rgba(255,255,255,.07); }
 .nav-item.active { color: #fff; background: linear-gradient(90deg,rgba(52,116,214,.3),rgba(52,116,214,.13)); box-shadow: inset 3px 0 #6aa2f5; }
-.nav-item:disabled { cursor: default; opacity: .65; }
+.nav-item:disabled { cursor: not-allowed; opacity: .76; }
 .nav-item small { margin-left: auto; padding: 3px 6px; border-radius: 5px; color: #7891ae; background: rgba(255,255,255,.06); font-size: .58rem; text-transform: uppercase; }
+.nav-item:disabled small { border: 1px solid rgba(143,166,194,.16); color: #9db0c7; background: rgba(255,255,255,.08); }
 .nav-icon { justify-self: center; flex: 0 0 20px; width: 20px; height: 20px; }
 .nav-item span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sidebar-footer { display: grid; gap: 4px; margin-top: auto; padding: 14px; border-top: 1px solid rgba(255,255,255,.08); }

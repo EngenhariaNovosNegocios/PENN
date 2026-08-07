@@ -130,10 +130,10 @@ export default function ManagerActivityDashboard({ onOpenIssues, onOpenProducts 
       supabase
         .from("product_development_tasks")
         .select(
-          "id, project_id, title, status, due_date, assignee_name, owner_area, product_development_projects(products(code, name))"
+          "id, project_id, title, status, due_date, assignee_name, owner_area, product_development_projects(product_id, products(code, name))"
         )
         .not("status", "in", "(completed,not_applicable)")
-        .order("due_date", { ascending: true }),
+        .order("due_date", { ascending: true, nullsFirst: false }),
     ]);
 
     const firstError =
@@ -238,7 +238,7 @@ export default function ManagerActivityDashboard({ onOpenIssues, onOpenProducts 
   ];
 
   return (
-    <main className={styles.page}>
+    <main aria-busy={loading} className={styles.page}>
       <section className={styles.hero}>
         <div>
           <span>Painel do gerente</span>
@@ -253,9 +253,17 @@ export default function ManagerActivityDashboard({ onOpenIssues, onOpenProducts 
         </button>
       </section>
 
-      {message && <p className={styles.message}>{message}</p>}
+      {message && (
+        <p className={styles.message} role="alert">
+          {message}
+        </p>
+      )}
 
-      <section className={styles.kpis} aria-label="Indicadores gerenciais">
+      <section
+        aria-label="Indicadores gerenciais"
+        aria-live="polite"
+        className={styles.kpis}
+      >
         {kpis.map((kpi) => (
           <article className={`${styles.kpiCard} ${styles[kpi.tone]}`} key={kpi.key}>
             <span className={styles.kpiIcon}>
@@ -264,7 +272,7 @@ export default function ManagerActivityDashboard({ onOpenIssues, onOpenProducts 
             <div className={styles.kpiCopy}>
               <small>{kpi.label}</small>
               <strong>{loading ? "—" : kpi.value}</strong>
-              <span>{kpi.detail}</span>
+              <span>{loading ? "Carregando dados..." : kpi.detail}</span>
             </div>
           </article>
         ))}
@@ -304,6 +312,9 @@ export default function ManagerActivityDashboard({ onOpenIssues, onOpenProducts 
             {!loading && urgentIssues.length === 0 && (
               <p className={styles.empty}>Nenhuma pendência aberta.</p>
             )}
+            {loading && urgentIssues.length === 0 && (
+              <p className={styles.empty}>Carregando pendências...</p>
+            )}
           </div>
         </article>
 
@@ -317,9 +328,15 @@ export default function ManagerActivityDashboard({ onOpenIssues, onOpenProducts 
 
           <div className={styles.list}>
             {upcomingTasks.map((task) => (
-              <div
+              <button
                 className={isOverdue(task.due_date) ? styles.overdue : ""}
                 key={task.id}
+                onClick={() =>
+                  onOpenProducts?.(
+                    task.product_development_projects?.product_id
+                  )
+                }
+                type="button"
               >
                 <span className={`${styles.status} ${styles[task.status]}`}>
                   {taskStatusLabels[task.status] ?? task.status}
@@ -333,11 +350,14 @@ export default function ManagerActivityDashboard({ onOpenIssues, onOpenProducts 
                   </small>
                 </div>
                 <time>{formatDate(task.due_date)}</time>
-              </div>
+              </button>
             ))}
 
             {!loading && upcomingTasks.length === 0 && (
               <p className={styles.empty}>Nenhuma tarefa aberta.</p>
+            )}
+            {loading && upcomingTasks.length === 0 && (
+              <p className={styles.empty}>Carregando tarefas...</p>
             )}
           </div>
         </article>
@@ -348,7 +368,7 @@ export default function ManagerActivityDashboard({ onOpenIssues, onOpenProducts 
               <span>Portfólio</span>
               <h2>Projetos ativos</h2>
             </div>
-            <button onClick={onOpenProducts} type="button">
+            <button onClick={() => onOpenProducts?.()} type="button">
               Ver produtos <ManagerIcon className={styles.buttonIcon} name="arrow" />
             </button>
           </header>
@@ -357,7 +377,7 @@ export default function ManagerActivityDashboard({ onOpenIssues, onOpenProducts 
             {data.projects.slice(0, 6).map((project) => (
               <button
                 key={project.id}
-                onClick={onOpenProducts}
+                onClick={() => onOpenProducts?.(project.product_id)}
                 type="button"
               >
                 <span className={styles.projectIcon}>
@@ -373,6 +393,9 @@ export default function ManagerActivityDashboard({ onOpenIssues, onOpenProducts 
 
             {!loading && data.projects.length === 0 && (
               <p className={styles.empty}>Nenhum projeto ativo.</p>
+            )}
+            {loading && data.projects.length === 0 && (
+              <p className={styles.empty}>Carregando projetos...</p>
             )}
           </div>
         </article>
@@ -406,6 +429,9 @@ export default function ManagerActivityDashboard({ onOpenIssues, onOpenProducts 
 
             {!loading && data.resolvedIssues.length === 0 && (
               <p className={styles.empty}>Nenhuma resolução recente.</p>
+            )}
+            {loading && data.resolvedIssues.length === 0 && (
+              <p className={styles.empty}>Carregando histórico...</p>
             )}
           </div>
         </article>

@@ -3,6 +3,10 @@
   --manager-shadow: 0 10px 30px rgba(23, 33, 43, 0.06);
   display: grid;
   gap: 18px;
+  width: 100%;
+  max-width: 1660px;
+  margin-inline: auto;
+  padding: clamp(18px, 2vw, 30px);
 }
 
 .hero {
@@ -413,6 +417,7 @@
 @media (max-width: 640px) {
   .page {
     gap: 12px;
+    padding: 14px 12px 30px;
   }
 
   .hero {

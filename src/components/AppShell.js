@@ -8,20 +8,18 @@ import StrategicIntelligenceDashboard from "@/components/StrategicIntelligenceDa
 import UserProfileDashboard from "@/components/UserProfileDashboard";
 import ManagerActivityDashboard from "@/components/ManagerActivityDashboard";
 import AccessManagementDashboard from "@/components/AccessManagementDashboard";
-import IndicatorsDashboard from "@/components/IndicatorsDashboard";
-import ReportsDashboard from "@/components/ReportsDashboard";
 import { supabase } from "@/lib/supabaseClient";
 
 const pageTitles = {
-  overview: "Visao geral",
+  overview: "Visão geral",
   products: "Produtos",
   "new-products": "Novos produtos",
-  intelligence: "Inteligencia NPI",
-  issues: "Pendencias",
-  manager: "Gerencia",
+  intelligence: "Inteligência NPI",
+  issues: "Pendências",
+  manager: "Gerência",
   access: "Acessos",
   indicators: "Indicadores",
-  reports: "Relatorios",
+  reports: "Relatórios",
   profile: "Minhas tarefas",
 };
 
@@ -40,7 +38,7 @@ function hasMinimumRole(currentRole, minimumRole) {
 }
 
 function getInitials(nameOrEmail) {
-  const value = nameOrEmail || "Usuario";
+  const value = nameOrEmail || "Usuário";
   const parts = value.split(/[.\s@_-]+/).filter(Boolean);
   return (parts[0]?.[0] ?? "U") + (parts[1]?.[0] ?? "");
 }
@@ -64,7 +62,7 @@ async function getPortalIdentity(user) {
       data?.full_name ||
       user.user_metadata?.full_name ||
       email.split("@")[0] ||
-      "Usuario",
+      "Usuário",
     role: data?.role || "colaborador",
   };
 }
@@ -177,20 +175,26 @@ const Icon = ({ name }) => {
 };
 
 const navigation = [
-  { id: "overview", label: "Visao geral", icon: "grid" },
+  { id: "overview", label: "Visão geral", icon: "grid" },
   { id: "products", label: "Produtos", icon: "box" },
   { id: "new-products", label: "Novos produtos", icon: "spark" },
-  { id: "intelligence", label: "Inteligencia NPI", icon: "brain" },
-  { id: "issues", label: "Pendencias", icon: "alert" },
-  { id: "manager", label: "Gerencia", icon: "manager", minimumRole: "gerente" },
+  { id: "intelligence", label: "Inteligência NPI", icon: "brain" },
+  { id: "issues", label: "Pendências", icon: "alert" },
+  { id: "manager", label: "Gerência", icon: "manager", minimumRole: "gerente" },
   { id: "access", label: "Acessos", icon: "users", minimumRole: "admin" },
-  { id: "indicators", label: "Indicadores", icon: "chart" },
-  { id: "reports", label: "Relatorios", icon: "file" },
+  { id: "indicators", label: "Indicadores", icon: "chart", disabled: true },
+  { id: "reports", label: "Relatórios", icon: "file", disabled: true },
 ];
 
+const auxiliaryPages = new Set(["profile"]);
+
 function canAccessPage(role, pageId) {
+  if (auxiliaryPages.has(pageId)) {
+    return true;
+  }
+
   const page = navigation.find((item) => item.id === pageId);
-  return hasMinimumRole(role, page?.minimumRole);
+  return Boolean(page) && !page.disabled && hasMinimumRole(role, page.minimumRole);
 }
 
 export default function AppShell({ children }) {
@@ -325,6 +329,24 @@ export default function AppShell({ children }) {
     setMenuOpen(false);
   }
 
+  function openProduct(productId) {
+    openPage("products");
+
+    if (!productId) {
+      return;
+    }
+
+    window.setTimeout(
+      () =>
+        window.dispatchEvent(
+          new CustomEvent("penn:open-product", {
+            detail: { productId },
+          })
+        ),
+      0
+    );
+  }
+
   return (
     <div className={`app-shell ${collapsed ? "sidebar-collapsed" : ""}`}>
       <aside className={`app-sidebar ${menuOpen ? "mobile-open" : ""}`}>
@@ -332,7 +354,7 @@ export default function AppShell({ children }) {
           <span className="brand-mark">P</span>
           <span className="brand-copy">
             <strong>PENN</strong>
-            <small>Engenharia & Negocios</small>
+            <small>Engenharia & Negócios</small>
           </span>
           <button
             aria-label="Fechar menu"
@@ -344,11 +366,12 @@ export default function AppShell({ children }) {
           </button>
         </div>
 
-        <nav className="primary-nav" aria-label="Navegacao principal">
+        <nav className="primary-nav" aria-label="Navegação principal">
           <button
             className={`nav-item personal-tasks-nav ${
               activePage === "profile" ? "active" : ""
             }`}
+            aria-current={activePage === "profile" ? "page" : undefined}
             onClick={() => openPage("profile")}
             title={collapsed ? "Minhas tarefas" : undefined}
             type="button"
@@ -362,10 +385,15 @@ export default function AppShell({ children }) {
           {visibleNavigation.map((item) => (
             <button
               className={`nav-item ${activePage === item.id ? "active" : ""}`}
+              aria-current={activePage === item.id ? "page" : undefined}
               disabled={item.disabled}
               key={item.label}
               onClick={() => openPage(item.id)}
-              title={collapsed ? item.label : undefined}
+              title={
+                collapsed || item.disabled
+                  ? `${item.label}${item.disabled ? " - Em breve" : ""}`
+                  : undefined
+              }
               type="button"
             >
               <Icon name={item.icon} />
@@ -378,7 +406,7 @@ export default function AppShell({ children }) {
         <div className="sidebar-footer">
           <button className="nav-item" disabled type="button">
             <Icon name="settings" />
-            <span>Configuracoes</span>
+            <span>Configurações</span>
           </button>
           <button className="nav-item" disabled type="button">
             <Icon name="help" />
@@ -487,42 +515,16 @@ export default function AppShell({ children }) {
             <NewProductsDashboard onOpenProducts={() => openPage("products")} />
           </section>
           <section className="app-page" hidden={activePage !== "intelligence"}>
-            <StrategicIntelligenceDashboard
-              onOpenProduct={(productId) => {
-                openPage("products");
-                window.setTimeout(
-                  () =>
-                    window.dispatchEvent(
-                      new CustomEvent("penn:open-product", {
-                        detail: { productId },
-                      })
-                    ),
-                  0
-                );
-              }}
-            />
+            <StrategicIntelligenceDashboard onOpenProduct={openProduct} />
           </section>
           <section className="app-page" hidden={activePage !== "issues"}>
-            <IssuesDashboard
-              onOpenProduct={(productId) => {
-                openPage("products");
-                window.setTimeout(
-                  () =>
-                    window.dispatchEvent(
-                      new CustomEvent("penn:open-product", {
-                        detail: { productId },
-                      })
-                    ),
-                  0
-                );
-              }}
-            />
+            <IssuesDashboard onOpenProduct={openProduct} />
           </section>
           {canAccessPage(accessRole, "manager") && (
             <section className="app-page" hidden={activePage !== "manager"}>
               <ManagerActivityDashboard
                 onOpenIssues={() => openPage("issues")}
-                onOpenProducts={() => openPage("products")}
+                onOpenProducts={openProduct}
               />
             </section>
           )}
@@ -531,12 +533,6 @@ export default function AppShell({ children }) {
               <AccessManagementDashboard />
             </section>
           )}
-          <section className="app-page" hidden={activePage !== "indicators"}>
-            <IndicatorsDashboard />
-          </section>
-          <section className="app-page" hidden={activePage !== "reports"}>
-            <ReportsDashboard />
-          </section>
           <section className="app-page" hidden={activePage !== "profile"}>
             <UserProfileDashboard />
           </section>
