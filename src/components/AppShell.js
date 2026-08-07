@@ -8,6 +8,7 @@ import StrategicIntelligenceDashboard from "@/components/StrategicIntelligenceDa
 import UserProfileDashboard from "@/components/UserProfileDashboard";
 import ManagerActivityDashboard from "@/components/ManagerActivityDashboard";
 import AccessManagementDashboard from "@/components/AccessManagementDashboard";
+import { isAssignedTo } from "@/lib/assignee";
 import { getCurrentStageTasks } from "@/lib/developmentWorkflow";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -179,7 +180,7 @@ const navigation = [
   { id: "overview", label: "Visão geral", icon: "grid" },
   { id: "products", label: "Produtos", icon: "box" },
   { id: "new-products", label: "Novos produtos", icon: "spark" },
-  { id: "intelligence", label: "Inteligência NPI", icon: "brain" },
+  { id: "intelligence", label: "Inteligência NPI", icon: "brain", disabled: true },
   { id: "issues", label: "Pendências", icon: "alert" },
   { id: "manager", label: "Gerência", icon: "manager", minimumRole: "gerente" },
   { id: "access", label: "Acessos", icon: "users", minimumRole: "admin" },
@@ -203,6 +204,7 @@ export default function AppShell({ children }) {
   const [collapsed, setCollapsed] = useState(false);
   const [activePage, setActivePage] = useState("overview");
   const [overdueTasks, setOverdueTasks] = useState([]);
+  const [assignedIssueCount, setAssignedIssueCount] = useState(0);
   const [profileName, setProfileName] = useState("Equipe PENN");
   const [userEmail, setUserEmail] = useState("");
   const [accessRole, setAccessRole] = useState("colaborador");
@@ -224,14 +226,20 @@ export default function AppShell({ children }) {
       } = await supabase.auth.getUser();
       const identity = await getPortalIdentity(user);
       const today = new Date().toISOString().slice(0, 10);
-      const { data } = await supabase
-        .from("product_development_tasks")
-        .select(
-          "id,project_id,stage_key,sort_order,status,title,due_date,assignee_name,assignee_email,product_development_projects(archived_at)"
-        );
+      const [tasksResult, issuesResult] = await Promise.all([
+        supabase
+          .from("product_development_tasks")
+          .select(
+            "id,project_id,stage_key,sort_order,status,title,due_date,assignee_name,assignee_email,product_development_projects(archived_at)"
+          ),
+        supabase
+          .from("product_issues")
+          .select("id,assignee_name,assignee_email")
+          .is("resolved_at", null),
+      ]);
 
       const currentStageTasks = getCurrentStageTasks(
-        (data ?? []).filter(
+        (tasksResult.data ?? []).filter(
           (task) => !task.product_development_projects?.archived_at
         )
       );
@@ -240,24 +248,31 @@ export default function AppShell({ children }) {
       setUserEmail(identity.email);
       setAccessRole(identity.role);
       setRoleLoaded(true);
+      setAssignedIssueCount(
+        (issuesResult.data ?? []).filter((issue) =>
+          isAssignedTo(issue, identity)
+        ).length
+      );
       setOverdueTasks(
         currentStageTasks.filter(
           (task) =>
             task.due_date &&
             task.due_date < today &&
-            (!identity.email ||
-              (task.assignee_email ?? "").toLowerCase() === identity.email ||
-              (task.assignee_name ?? "").toLowerCase() ===
-                identity.name.toLowerCase())
+            isAssignedTo(task, identity)
         )
       );
     }
 
     loadNotifications();
     window.addEventListener("penn:tasks-changed", loadNotifications);
-    return () =>
+    window.addEventListener("penn:issues-changed", loadNotifications);
+    return () => {
       window.removeEventListener("penn:tasks-changed", loadNotifications);
+      window.removeEventListener("penn:issues-changed", loadNotifications);
+    };
   }, []);
+
+  const profileAlertCount = overdueTasks.length + assignedIssueCount;
 
   useEffect(() => {
     if (roleLoaded && !canAccessPage(accessRole, activePage)) {
@@ -355,6 +370,23 @@ export default function AppShell({ children }) {
     );
   }
 
+  function openDevelopmentTask(task) {
+    if (!task?.projectId) {
+      return;
+    }
+
+    openPage("new-products");
+    window.setTimeout(
+      () =>
+        window.dispatchEvent(
+          new CustomEvent("penn:open-development-task", {
+            detail: task,
+          })
+        ),
+      0
+    );
+  }
+
   return (
     <div className={`app-shell ${collapsed ? "sidebar-collapsed" : ""}`}>
       <aside className={`app-sidebar ${menuOpen ? "mobile-open" : ""}`}>
@@ -386,7 +418,7 @@ export default function AppShell({ children }) {
           >
             <Icon name="tasks" />
             <span>Minhas tarefas</span>
-            {overdueTasks.length > 0 && <small>{overdueTasks.length}</small>}
+            {profileAlertCount > 0 && <small>{profileAlertCount}</small>}
           </button>
 
           <span className="nav-section-label">Workspace</span>
@@ -472,13 +504,13 @@ export default function AppShell({ children }) {
               <i /> Ambiente interno
             </span>
             <button
-              aria-label={`${overdueTasks.length} tarefas vencidas`}
-              className={`notification ${overdueTasks.length ? "has-alert" : ""}`}
+              aria-label={`${profileAlertCount} itens que precisam da sua atenção`}
+              className={`notification ${profileAlertCount ? "has-alert" : ""}`}
               onClick={() => openPage("profile")}
               type="button"
             >
               !
-              {overdueTasks.length > 0 && <b>{overdueTasks.length}</b>}
+              {profileAlertCount > 0 && <b>{profileAlertCount}</b>}
             </button>
             <button className="logout-button" onClick={signOut} type="button">
               Sair
@@ -531,6 +563,7 @@ export default function AppShell({ children }) {
           {canAccessPage(accessRole, "manager") && (
             <section className="app-page" hidden={activePage !== "manager"}>
               <ManagerActivityDashboard
+                onOpenDevelopmentTask={openDevelopmentTask}
                 onOpenIssues={() => openPage("issues")}
                 onOpenProducts={openProduct}
               />

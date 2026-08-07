@@ -80,7 +80,11 @@ function isOverdue(value) {
   return Boolean(value) && new Date(`${value}T23:59:59`) < new Date();
 }
 
-export default function ManagerActivityDashboard({ onOpenIssues, onOpenProducts }) {
+export default function ManagerActivityDashboard({
+  onOpenDevelopmentTask,
+  onOpenIssues,
+  onOpenProducts,
+}) {
   const [data, setData] = useState({
     products: [],
     issues: [],
@@ -338,9 +342,11 @@ export default function ManagerActivityDashboard({ onOpenIssues, onOpenProducts 
                 className={isOverdue(task.due_date) ? styles.overdue : ""}
                 key={task.id}
                 onClick={() =>
-                  onOpenProducts?.(
-                    task.product_development_projects?.product_id
-                  )
+                  onOpenDevelopmentTask?.({
+                    projectId: task.project_id,
+                    stageKey: task.stage_key,
+                    taskId: task.id,
+                  })
                 }
                 type="button"
               >

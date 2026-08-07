@@ -61,6 +61,8 @@ export default function NewProductsDashboard({ onOpenProducts }) {
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [expandedTaskId, setExpandedTaskId] = useState(null);
+  const [highlightedTaskId, setHighlightedTaskId] = useState(null);
+  const [taskNavigationRequest, setTaskNavigationRequest] = useState(0);
   const [taskNotes, setTaskNotes] = useState({});
   const [packageForm, setPackageForm] = useState(emptyPackage);
   const [packageItemForm, setPackageItemForm] = useState(emptyPackageItem);
@@ -98,6 +100,33 @@ export default function NewProductsDashboard({ onOpenProducts }) {
 
   useEffect(() => { loadWorkflow(); }, []);
 
+  useEffect(() => {
+    function openDevelopmentTask(event) {
+      const { projectId, stageKey, taskId } = event.detail ?? {};
+
+      if (!projectId) {
+        return;
+      }
+
+      setWorkspaceView("portfolio");
+      setShowArchived(false);
+      setSelectedProjectId(Number(projectId));
+      setExpandedStage(stageKey || "discovery");
+      setExpandedTaskId(null);
+      setHighlightedTaskId(taskId ?? null);
+      setTaskNavigationRequest((current) => current + 1);
+      setEditingProject(false);
+      setMessage("");
+    }
+
+    window.addEventListener("penn:open-development-task", openDevelopmentTask);
+    return () =>
+      window.removeEventListener(
+        "penn:open-development-task",
+        openDevelopmentTask
+      );
+  }, []);
+
   const projectData = useMemo(() => projects.map((project) => {
     const product = products.find((item) => item.id === project.product_id);
     const projectTasks = tasks.filter((task) => task.project_id === project.id);
@@ -110,6 +139,7 @@ export default function NewProductsDashboard({ onOpenProducts }) {
   const selectedCurrentStageKey = selectedProject
     ? getCurrentStageKey(selectedProject.projectTasks)
     : null;
+  const selectedProjectTaskCount = selectedProject?.projectTasks.length ?? 0;
   const activeProjects = projectData.filter((project) => !project.archived_at);
   const archivedProjects = projectData.filter((project) => project.archived_at);
   const visibleProjects = showArchived ? archivedProjects : activeProjects;
@@ -128,6 +158,29 @@ export default function NewProductsDashboard({ onOpenProducts }) {
       setExpandedStage(selectedCurrentStageKey);
     }
   }, [selectedProjectId, selectedCurrentStageKey]);
+
+  useEffect(() => {
+    if (!highlightedTaskId || !selectedProjectId) {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => {
+      const target = document.getElementById(
+        `development-task-${highlightedTaskId}`
+      );
+
+      target?.focus({ preventScroll: true });
+      target?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 120);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    expandedStage,
+    highlightedTaskId,
+    selectedProjectId,
+    selectedProjectTaskCount,
+    taskNavigationRequest,
+  ]);
 
   async function createProject(event) {
     event.preventDefault(); const product = products.find((item) => item.code.toLowerCase() === form.productCode.trim().toLowerCase());
@@ -229,9 +282,15 @@ export default function NewProductsDashboard({ onOpenProducts }) {
 
   function openProjectQuotation(projectId) {
     setSelectedProjectId(projectId);
+    setHighlightedTaskId(null);
     setSelectedPackageId(null);
     cancelEditQuotationItem();
     setWorkspaceView("quotations");
+  }
+
+  function openProject(projectId) {
+    setHighlightedTaskId(null);
+    setSelectedProjectId(projectId);
   }
 
   if (workspaceView === "quotations") return (
@@ -243,7 +302,7 @@ export default function NewProductsDashboard({ onOpenProducts }) {
   );
 
   if (selectedProject) return (
-    <main className="flow-page"><button className="flow-back" onClick={() => setSelectedProjectId(null)}><FlowIcon name="back"/> Voltar aos projetos</button>
+    <main className="flow-page"><button className="flow-back" onClick={() => openProject(null)}><FlowIcon name="back"/> Voltar aos projetos</button>
       <section className="flow-detail-hero"><div><span>{selectedProject.product?.code}</span><h1>{selectedProject.product?.name}</h1><p>{selectedProject.development_reason || "Fluxo estruturado de desenvolvimento e lançamento."}</p><div className="flow-detail-actions"><button onClick={beginProjectEdit}>Editar dados do projeto</button><button className="archive-project-button" onClick={archiveProject}>Arquivar projeto</button></div></div><div className="flow-detail-score"><strong>{selectedProject.progress}%</strong><span>concluído</span></div></section>
       <section className="flow-project-info"><div><span>Solicitante</span><strong>{selectedProject.requester || "Não definido"}</strong></div><div><span>Responsável</span><strong>{selectedProject.owner || "Não definido"}</strong></div><div className="launch-date-editor"><span>Lançamento previsto</span><input type="date" value={selectedProject.target_launch_date || ""} onChange={(event)=>changeLaunchDate(event.target.value)} /><small>{launchHistory.filter((item)=>item.project_id===selectedProject.id).length} alterações registradas</small></div><div><span>Preço objetivo</span><strong>{selectedProject.target_price ? Number(selectedProject.target_price).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "Não definido"}</strong></div></section>
       {editingProject&&<section className="project-edit-panel"><header><div><span className="panel-kicker">Edição auditável</span><h2>Dados iniciais do desenvolvimento</h2></div><button onClick={()=>setEditingProject(false)}>Fechar</button></header><form onSubmit={saveProjectEdit}><label>Solicitante<input value={projectEdit.requester} onChange={e=>setProjectEdit({...projectEdit,requester:e.target.value})}/></label><label>Responsável<input value={projectEdit.owner} onChange={e=>setProjectEdit({...projectEdit,owner:e.target.value})}/></label><label>Lançamento previsto<input type="date" value={projectEdit.target_launch_date} onChange={e=>setProjectEdit({...projectEdit,target_launch_date:e.target.value})}/></label><label>Preço objetivo<input type="number" step=".01" value={projectEdit.target_price} onChange={e=>setProjectEdit({...projectEdit,target_price:e.target.value})}/></label>{[["expected_demand","Demanda esperada"],["potential_clients","Clientes potenciais"],["market_potential","Mercado potencial"],["technical_specs","Especificações técnicas"],["development_reason","Motivo e diferencial"]].map(([field,label])=><label className="wide" key={field}>{label}<textarea rows="2" value={projectEdit[field]} onChange={e=>setProjectEdit({...projectEdit,[field]:e.target.value})}/></label>)}<footer><small>{projectHistory.filter(item=>item.project_id===selectedProject.id).length} alterações registradas</small><button>Salvar alterações</button></footer></form></section>}
@@ -308,8 +367,12 @@ export default function NewProductsDashboard({ onOpenProducts }) {
                 <div className="flow-task-list">
                   {stageTasks.map((task) => (
                     <div
-                      className={`flow-task-wrap ${task.status}`}
+                      className={`flow-task-wrap ${task.status} ${
+                        task.id === highlightedTaskId ? "targeted" : ""
+                      }`}
+                      id={`development-task-${task.id}`}
                       key={task.id}
+                      tabIndex={task.id === highlightedTaskId ? -1 : undefined}
                     >
                       <div className="flow-task">
                         <button
@@ -431,7 +494,7 @@ export default function NewProductsDashboard({ onOpenProducts }) {
       {!showArchived&&<><section className="flow-quick-actions"><button onClick={openQuotationWorkspace}><span>Pacotes de cotação</span><strong>Abrir central de composições</strong><small>EXW, FOB, NET, impostos e consolidação</small><FlowIcon name="arrow"/></button></section><section className="flow-summary"><article><span>Projetos ativos</span><strong>{activeProjects.length}</strong></article><article><span>Em andamento</span><strong>{progressingTasks}</strong></article><article><span>Tarefas concluídas</span><strong>{completedTasks}</strong></article><article className="blocked"><span>Bloqueios</span><strong>{blockedTasks}</strong></article></section></>}
       {message && <p className="flow-message">{message}</p>}
       {showForm && <section className="flow-create"><header><div><span className="panel-kicker">Novo fluxo</span><h2>Dados estratégicos do projeto</h2></div><button onClick={() => setShowForm(false)}>Fechar</button></header><form onSubmit={createProject}><label>Código do produto<input list="flow-products" required value={form.productCode} onChange={(e) => setForm({...form,productCode:e.target.value})}/><datalist id="flow-products">{products.map((p)=><option key={p.id} value={p.code}>{p.name}</option>)}</datalist></label><label>Solicitante<input required value={form.requester} onChange={(e)=>setForm({...form,requester:e.target.value})}/></label><label>Responsável<input required value={form.owner} onChange={(e)=>setForm({...form,owner:e.target.value})}/></label><label>Lançamento previsto<input type="date" value={form.targetLaunchDate} onChange={(e)=>setForm({...form,targetLaunchDate:e.target.value})}/></label><label>Preço objetivo<input min="0" step="0.01" type="number" value={form.targetPrice} onChange={(e)=>setForm({...form,targetPrice:e.target.value})}/></label><label>Demanda esperada<input value={form.expectedDemand} onChange={(e)=>setForm({...form,expectedDemand:e.target.value})}/></label><label className="wide">Clientes potenciais<textarea rows="2" value={form.potentialClients} onChange={(e)=>setForm({...form,potentialClients:e.target.value})}/></label><label className="wide">Mercado potencial<textarea rows="2" value={form.marketPotential} onChange={(e)=>setForm({...form,marketPotential:e.target.value})}/></label><label className="wide">Especificações técnicas<textarea rows="3" value={form.technicalSpecs} onChange={(e)=>setForm({...form,technicalSpecs:e.target.value})}/></label><label className="wide">Por que desenvolver este produto? Qual o diferencial?<textarea required rows="3" value={form.developmentReason} onChange={(e)=>setForm({...form,developmentReason:e.target.value})}/></label><div className="flow-form-action"><button disabled={saving}>{saving ? "Criando fluxo..." : "Criar projeto e checklist"}</button></div></form></section>}
-      <section className={`flow-projects ${showArchived?"archived-projects":""}`}><header><div><span className="panel-kicker">{showArchived?"Histórico preservado":"Portfólio em desenvolvimento"}</span><h2>{showArchived?"Arquivo de projetos":"Projetos e evolução"}</h2></div><span>{visibleProjects.length} projetos</span></header><div>{visibleProjects.map((project)=>showArchived?<article className="archived-project-card" key={project.id}><span className="flow-project-code">{project.product?.code?.slice(-2)||"NP"}</span><div><strong>{project.product?.name}</strong><small>{project.product?.code} · Arquivado em {new Date(project.archived_at).toLocaleDateString("pt-BR")}</small></div><span className="archive-card-progress">{project.progress}% concluído</span><div className="archive-card-actions"><button onClick={()=>restoreProject(project)}>Restaurar</button><button className="delete" onClick={()=>{setDeleteCandidate(project);setDeleteConfirmation("")}}>Excluir</button></div></article>:<article className="flow-project-row" key={project.id}><button className="flow-project-card" onClick={()=>setSelectedProjectId(project.id)}><span className="flow-project-code">{project.product?.code?.slice(-2)||"NP"}</span><div><strong>{project.product?.name}</strong><small>{project.product?.code} · {project.owner||"Sem responsável"}</small></div><span className="flow-project-meter"><i><b style={{width:`${project.progress}%`}}/></i><strong>{project.progress}%</strong></span>{project.blocked>0&&<span className="flow-blocked">{project.blocked} bloqueios</span>}<FlowIcon name="arrow"/></button><button className="project-quotation-link" onClick={()=>openProjectQuotation(project.id)}>Abrir composição</button></article>)}{visibleProjects.length===0&&<div className="flow-empty"><FlowIcon name="spark"/><strong>{showArchived?"Nenhum projeto arquivado":"Nenhum desenvolvimento iniciado"}</strong><span>{showArchived?"Os projetos arquivados aparecerão aqui sem poluir o portfólio ativo.":"Crie o primeiro fluxo para transformar a lista antiga em um processo vivo."}</span></div>}</div></section>
+      <section className={`flow-projects ${showArchived?"archived-projects":""}`}><header><div><span className="panel-kicker">{showArchived?"Histórico preservado":"Portfólio em desenvolvimento"}</span><h2>{showArchived?"Arquivo de projetos":"Projetos e evolução"}</h2></div><span>{visibleProjects.length} projetos</span></header><div>{visibleProjects.map((project)=>showArchived?<article className="archived-project-card" key={project.id}><span className="flow-project-code">{project.product?.code?.slice(-2)||"NP"}</span><div><strong>{project.product?.name}</strong><small>{project.product?.code} · Arquivado em {new Date(project.archived_at).toLocaleDateString("pt-BR")}</small></div><span className="archive-card-progress">{project.progress}% concluído</span><div className="archive-card-actions"><button onClick={()=>restoreProject(project)}>Restaurar</button><button className="delete" onClick={()=>{setDeleteCandidate(project);setDeleteConfirmation("")}}>Excluir</button></div></article>:<article className="flow-project-row" key={project.id}><button className="flow-project-card" onClick={()=>openProject(project.id)}><span className="flow-project-code">{project.product?.code?.slice(-2)||"NP"}</span><div><strong>{project.product?.name}</strong><small>{project.product?.code} · {project.owner||"Sem responsável"}</small></div><span className="flow-project-meter"><i><b style={{width:`${project.progress}%`}}/></i><strong>{project.progress}%</strong></span>{project.blocked>0&&<span className="flow-blocked">{project.blocked} bloqueios</span>}<FlowIcon name="arrow"/></button><button className="project-quotation-link" onClick={()=>openProjectQuotation(project.id)}>Abrir composição</button></article>)}{visibleProjects.length===0&&<div className="flow-empty"><FlowIcon name="spark"/><strong>{showArchived?"Nenhum projeto arquivado":"Nenhum desenvolvimento iniciado"}</strong><span>{showArchived?"Os projetos arquivados aparecerão aqui sem poluir o portfólio ativo.":"Crie o primeiro fluxo para transformar a lista antiga em um processo vivo."}</span></div>}</div></section>
       {deleteCandidate&&<div className="archive-confirm-backdrop"><section className="archive-confirm" role="dialog" aria-modal="true" aria-labelledby="delete-project-title"><span>Exclusão definitiva</span><h2 id="delete-project-title">Excluir {deleteCandidate.product?.name}?</h2><p>Essa ação removerá o projeto, suas etapas, cotações, anexos e histórico relacionado. Ela não poderá ser desfeita.</p><label>Digite <strong>{deleteCandidate.product?.code}</strong> para confirmar<input autoFocus value={deleteConfirmation} onChange={(event)=>setDeleteConfirmation(event.target.value)} placeholder={deleteCandidate.product?.code}/></label><div><button onClick={()=>{setDeleteCandidate(null);setDeleteConfirmation("")}}>Cancelar</button><button className="danger" disabled={deleteConfirmation.trim()!==deleteCandidate.product?.code} onClick={deleteProject}>Excluir definitivamente</button></div></section></div>}
     </main>
   );

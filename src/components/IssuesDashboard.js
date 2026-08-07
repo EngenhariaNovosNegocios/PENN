@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
-const emptyForm = { productCode: "", description: "", priority: "media", dueDate: "", assigneeName:"" };
+const emptyForm = { productCode: "", description: "", priority: "media", dueDate: "", assigneeEmail: "" };
 const priorityMeta = {
   baixa: { label: "Baixa", className: "low" },
   media: { label: "Média", className: "medium" },
@@ -36,8 +36,8 @@ export default function IssuesDashboard({ onOpenProduct }) {
   async function loadData() {
     const [productsResult, issuesResult, resolvedResult, profilesResult] = await Promise.all([
       supabase.from("products").select("id, code, name, status").order("code"),
-      supabase.from("product_issues").select("id, product_id, product_code, description, priority, due_date, created_at").is("resolved_at", null).order("created_at", { ascending: false }),
-      supabase.from("product_issues").select("id, product_id, product_code, description, priority, due_date, created_at, resolved_at, resolution_note").not("resolved_at", "is", null).order("resolved_at", { ascending: false }),
+      supabase.from("product_issues").select("id, product_id, product_code, description, priority, due_date, assignee_name, assignee_email, created_at").is("resolved_at", null).order("created_at", { ascending: false }),
+      supabase.from("product_issues").select("id, product_id, product_code, description, priority, due_date, assignee_name, assignee_email, created_at, resolved_at, resolution_note").not("resolved_at", "is", null).order("resolved_at", { ascending: false }),
       supabase.from("user_profiles").select("id,full_name,email").order("full_name"),
     ]);
     if (productsResult.error || issuesResult.error) {
@@ -61,7 +61,7 @@ export default function IssuesDashboard({ onOpenProduct }) {
     const note = window.prompt("Descreva como a pendência foi resolvida (mínimo de 10 caracteres):");
     if (!note?.trim() || note.trim().length < 10) { setMessage("A resolução precisa ter pelo menos 10 caracteres."); return; }
     const resolvedAt = new Date().toISOString();
-    const { data, error } = await supabase.from("product_issues").update({ resolution_note: note.trim(), resolved_at: resolvedAt }).eq("id", issue.id).select("id, product_id, product_code, description, priority, due_date, created_at, resolved_at, resolution_note").single();
+    const { data, error } = await supabase.from("product_issues").update({ resolution_note: note.trim(), resolved_at: resolvedAt }).eq("id", issue.id).select("id, product_id, product_code, description, priority, due_date, assignee_name, assignee_email, created_at, resolved_at, resolution_note").single();
     if (error) { setMessage(`Não foi possível resolver: ${error.message}`); return; }
     setIssues((current) => current.filter((item) => item.id !== issue.id));
     setResolvedIssues((current) => [data, ...current]);
@@ -78,12 +78,17 @@ export default function IssuesDashboard({ onOpenProduct }) {
     const product = products.find((item) => item.code.toLowerCase() === form.productCode.trim().toLowerCase());
     if (!product) { setMessage("Informe um código de produto válido."); return; }
     setSubmitting(true); setMessage("");
-    const assignee=profiles.find(profile=>profile.full_name===form.assigneeName); const { data, error } = await supabase.from("product_issues").insert({ product_id: product.id, product_code: product.code, description: form.description.trim(), priority: form.priority, due_date: form.dueDate, assignee_name:assignee?.full_name||null, assignee_email:assignee?.email||null }).select("*").single();
+    const assignee = profiles.find(
+      (profile) => profile.email?.toLowerCase() === form.assigneeEmail.toLowerCase()
+    );
+    if (!assignee) { setMessage("Selecione um responsável válido."); setSubmitting(false); return; }
+    const { data, error } = await supabase.from("product_issues").insert({ product_id: product.id, product_code: product.code, description: form.description.trim(), priority: form.priority, due_date: form.dueDate, assignee_name: assignee.full_name, assignee_email: assignee.email.trim().toLowerCase() }).select("*").single();
     if (error) { setMessage(`Não foi possível registrar: ${error.message}`); setSubmitting(false); return; }
     await supabase.from("products").update({ status: "manutencao" }).eq("id", product.id);
     setIssues((current) => [data, ...current]);
     setProducts((current) => current.map((item) => item.id === product.id ? { ...item, status: "manutencao" } : item));
     setForm(emptyForm); setSubmitting(false); setMessage("Problema registrado com sucesso.");
+    window.dispatchEvent(new CustomEvent("penn:issues-changed"));
   }
 
   const filteredIssues = issues.filter((issue) => priorityFilter === "todos" || issue.priority === priorityFilter);
@@ -100,7 +105,7 @@ export default function IssuesDashboard({ onOpenProduct }) {
         <form onSubmit={registerIssue}>
           <label>Código do produto<input list="product-codes" required value={form.productCode} onChange={(event) => setForm({ ...form, productCode: event.target.value })} placeholder="Ex.: PENN-001"/><datalist id="product-codes">{products.map((product) => <option key={product.id} value={product.code}>{product.name}</option>)}</datalist></label>
           <label className="issue-description-field">Descrição da pendência<textarea minLength="10" required rows="3" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Descreva claramente a pendência encontrada (mínimo de 10 caracteres)..."/></label>
-          <label className="issue-assignee-field">Responsável<select required value={form.assigneeName} onChange={event=>setForm({...form,assigneeName:event.target.value})}><option value="">Selecione pelo nome</option>{profiles.map(profile=><option key={profile.id} value={profile.full_name}>{profile.full_name}</option>)}</select></label>
+          <label className="issue-assignee-field">Responsável<select required value={form.assigneeEmail} onChange={event=>setForm({...form,assigneeEmail:event.target.value})}><option value="">Selecione pelo nome</option>{profiles.map(profile=><option key={profile.id} value={profile.email}>{profile.full_name}</option>)}</select></label>
           <label className="issue-due-field">Prazo para resolução<input required type="date" value={form.dueDate} onChange={(event) => setForm({ ...form, dueDate: event.target.value })}/></label>
           <label className="issue-priority-field">Prioridade<select value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })}>{Object.entries(priorityMeta).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}</select></label>
           <div className="issue-form-action"><button disabled={submitting}><IssueIcon name="plus"/>{submitting ? "Registrando..." : "Registrar problema"}</button></div>
@@ -120,7 +125,7 @@ export default function IssuesDashboard({ onOpenProduct }) {
                 <div><strong>{product.code}</strong><h3>{product.name}</h3></div>
                 <span>{productIssues.length} {productIssues.length === 1 ? "pendência" : "pendências"}</span>
               </header>
-              <div>{productIssues.map((issue, index) => { const isOverdue = issue.due_date && new Date(`${issue.due_date}T23:59:59`) < new Date(); return <div className="global-issue-row" key={issue.id}><span className="issue-order">{String(index + 1).padStart(2,"0")}</span><div><strong>{issue.description}</strong><span><i className={`priority-dot ${priorityMeta[issue.priority]?.className || "medium"}`}/>{priorityMeta[issue.priority]?.label || "Média"}</span></div><span className={isOverdue ? "issue-deadline overdue" : "issue-deadline"}><IssueIcon name="calendar"/>{issue.due_date ? new Date(`${issue.due_date}T12:00:00`).toLocaleDateString("pt-BR") : "Sem prazo"}</span><button className="resolve-issue-button" onClick={() => resolveIssue(issue)}>Resolver</button></div>})}</div>
+              <div>{productIssues.map((issue, index) => { const isOverdue = issue.due_date && new Date(`${issue.due_date}T23:59:59`) < new Date(); return <div className="global-issue-row" key={issue.id}><span className="issue-order">{String(index + 1).padStart(2,"0")}</span><div><strong>{issue.description}</strong><span><i className={`priority-dot ${priorityMeta[issue.priority]?.className || "medium"}`}/>{priorityMeta[issue.priority]?.label || "Média"}{issue.assignee_name ? ` · ${issue.assignee_name}` : ""}</span></div><span className={isOverdue ? "issue-deadline overdue" : "issue-deadline"}><IssueIcon name="calendar"/>{issue.due_date ? new Date(`${issue.due_date}T12:00:00`).toLocaleDateString("pt-BR") : "Sem prazo"}</span><button className="resolve-issue-button" onClick={() => resolveIssue(issue)}>Resolver</button></div>})}</div>
             </article>
           ))}
           {groups.length === 0 && <div className="issues-empty"><IssueIcon name="alert"/><strong>Nenhuma pendência encontrada</strong><span>Não há ocorrências abertas com este filtro.</span></div>}
