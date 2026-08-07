@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { getCurrentStageTasks } from "@/lib/developmentWorkflow";
 import { supabase } from "@/lib/supabaseClient";
 
 const statusMeta = {
@@ -34,15 +35,22 @@ export default function OverviewDashboard({ onOpenProducts, onOpenIssues }) {
         supabase.from("product_attachments").select("id, product_id, kind, file_type"),
         supabase.from("product_structure_items").select("id, product_id"),
         supabase.from("product_development_projects").select("id, target_launch_date, archived_at").is("archived_at", null),
-        supabase.from("product_development_tasks").select("id,title,due_date,assignee_name,owner_area,status,product_development_projects(products(code,name))").lt("due_date",today).not("status","in","(completed,not_applicable)").order("due_date"),
+        supabase.from("product_development_tasks").select("id,project_id,stage_key,sort_order,title,due_date,assignee_name,owner_area,status,product_development_projects(archived_at,products(code,name))").order("sort_order"),
       ]);
+      const currentStageTasks = getCurrentStageTasks(
+        (tasksResult.data ?? []).filter(
+          (task) => !task.product_development_projects?.archived_at
+        )
+      );
       setData({
         products: productsResult.data ?? [],
         issues: issuesResult.data ?? [],
         attachments: attachmentsResult.data ?? [],
         structure: structureResult.data ?? [],
         projects: projectsResult.data ?? [],
-        overdueTasks: tasksResult.data ?? [],
+        overdueTasks: currentStageTasks.filter(
+          (task) => task.due_date && task.due_date < today
+        ),
       });
       setLoading(false);
     }
@@ -105,7 +113,7 @@ export default function OverviewDashboard({ onOpenProducts, onOpenIssues }) {
         </article>
 
         <article className="dashboard-panel overdue-tasks-panel">
-          <header><div><span className="panel-kicker">Ação imediata</span><h2>Tarefas vencidas</h2></div><span className="overdue-count">{data.overdueTasks.length}</span></header>
+          <header><div><span className="panel-kicker">Ação imediata</span><h2>Tarefas vencidas da etapa atual</h2></div><span className="overdue-count">{data.overdueTasks.length}</span></header>
           <div className="overview-task-list">{data.overdueTasks.slice(0,5).map(task=><div key={task.id}><span>!</span><div><strong>{task.title}</strong><small>{task.product_development_projects?.products?.code} · {task.assignee_name||task.owner_area||"Sem responsável"}</small></div><time>{new Date(`${task.due_date}T12:00:00`).toLocaleDateString("pt-BR")}</time></div>)}{!loading&&data.overdueTasks.length===0&&<div className="overview-empty">Nenhuma tarefa vencida.</div>}</div>
         </article>
       </section>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { getCurrentStageTasks } from "@/lib/developmentWorkflow";
 import { supabase } from "@/lib/supabaseClient";
 import styles from "./ManagerActivityDashboard.module.css";
 
@@ -130,10 +131,9 @@ export default function ManagerActivityDashboard({ onOpenIssues, onOpenProducts 
       supabase
         .from("product_development_tasks")
         .select(
-          "id, project_id, title, status, due_date, assignee_name, owner_area, product_development_projects(product_id, products(code, name))"
+          "id, project_id, stage_key, sort_order, title, status, due_date, assignee_name, owner_area, product_development_projects(product_id, archived_at, products(code, name))"
         )
-        .not("status", "in", "(completed,not_applicable)")
-        .order("due_date", { ascending: true, nullsFirst: false }),
+        .order("sort_order", { ascending: true }),
     ]);
 
     const firstError =
@@ -147,12 +147,18 @@ export default function ManagerActivityDashboard({ onOpenIssues, onOpenProducts 
       setMessage(`Não foi possível carregar o painel: ${firstError.message}`);
     }
 
+    const currentStageTasks = getCurrentStageTasks(
+      (tasksResult.data ?? []).filter(
+        (task) => !task.product_development_projects?.archived_at
+      )
+    );
+
     setData({
       products: productsResult.data ?? [],
       issues: issuesResult.data ?? [],
       resolvedIssues: resolvedIssuesResult.data ?? [],
       projects: projectsResult.data ?? [],
-      tasks: tasksResult.data ?? [],
+      tasks: currentStageTasks,
     });
     setLoading(false);
   }
@@ -205,7 +211,7 @@ export default function ManagerActivityDashboard({ onOpenIssues, onOpenProducts 
   const kpis = [
     {
       key: "tasks",
-      label: "Tarefas abertas",
+      label: "Próximas atividades",
       value: metrics.openTasks,
       detail: `${metrics.overdueTasks} vencidas`,
       icon: "clock",
@@ -322,7 +328,7 @@ export default function ManagerActivityDashboard({ onOpenIssues, onOpenProducts 
           <header>
             <div>
               <span>Execução</span>
-              <h2>Tarefas de NPI em andamento</h2>
+              <h2>Tarefas da etapa atual</h2>
             </div>
           </header>
 

@@ -8,6 +8,7 @@ import StrategicIntelligenceDashboard from "@/components/StrategicIntelligenceDa
 import UserProfileDashboard from "@/components/UserProfileDashboard";
 import ManagerActivityDashboard from "@/components/ManagerActivityDashboard";
 import AccessManagementDashboard from "@/components/AccessManagementDashboard";
+import { getCurrentStageTasks } from "@/lib/developmentWorkflow";
 import { supabase } from "@/lib/supabaseClient";
 
 const pageTitles = {
@@ -225,22 +226,29 @@ export default function AppShell({ children }) {
       const today = new Date().toISOString().slice(0, 10);
       const { data } = await supabase
         .from("product_development_tasks")
-        .select("id,title,due_date,assignee_name,assignee_email")
-        .lt("due_date", today)
-        .not("status", "in", "(completed,not_applicable)");
+        .select(
+          "id,project_id,stage_key,sort_order,status,title,due_date,assignee_name,assignee_email,product_development_projects(archived_at)"
+        );
+
+      const currentStageTasks = getCurrentStageTasks(
+        (data ?? []).filter(
+          (task) => !task.product_development_projects?.archived_at
+        )
+      );
 
       setProfileName(identity.name);
       setUserEmail(identity.email);
       setAccessRole(identity.role);
       setRoleLoaded(true);
       setOverdueTasks(
-        (data ?? []).filter(
+        currentStageTasks.filter(
           (task) =>
-            !identity.email ||
-            (task.assignee_email ?? "").toLowerCase() ===
-              identity.email ||
-            (task.assignee_name ?? "").toLowerCase() ===
-              identity.name.toLowerCase()
+            task.due_date &&
+            task.due_date < today &&
+            (!identity.email ||
+              (task.assignee_email ?? "").toLowerCase() === identity.email ||
+              (task.assignee_name ?? "").toLowerCase() ===
+                identity.name.toLowerCase())
         )
       );
     }

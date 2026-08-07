@@ -2,26 +2,18 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-
-const workflowStages = [
-  { key: "discovery", number: "01", title: "Levantamento e oportunidade", area: "Produto & Comercial", color: "blue", tasks: ["Definir solicitante e responsável", "Registrar preço de venda objetivo", "Estimar demanda e clientes potenciais", "Dimensionar mercado potencial", "Consolidar especificações técnicas", "Registrar proposta de valor e diferenciais"] },
-  { key: "viability", number: "02", title: "Viabilidade e aprovações", area: "Comercial & Diretoria", color: "violet", tasks: ["Validar hipótese comercial com MVP", "Executar validação de interesse do mercado", "Realizar análise de procurement", "Avaliar necessidade de certificação", "Validar NCM aplicável", "Analisar benefícios fiscais potenciais", "Calcular margem de contribuição e payback", "Obter aprovação Comercial", "Obter aprovação da Diretoria"] },
-  { key: "samples", number: "03", title: "Amostras e suprimentos", area: "Compras & Engenharia", color: "amber", tasks: ["Definir e adquirir amostras", "Cadastrar matéria-prima necessária", "Validar fornecedor e condições de compra", "Emitir solicitação interna de compra", "Confirmar chegada e entrada fiscal dos materiais"] },
-  { key: "technical", number: "04", title: "Viabilidade técnica", area: "Engenharia", color: "cyan", tasks: ["Planejar desenvolvimento de hardware e firmware", "Realizar análise cosmética e de embalagem", "Executar testes de bancada", "Executar teste de campo ou cliente final", "Comparar capacidade com o datasheet", "Consolidar melhorias e personalizações", "Decidir sobre necessidade de novas amostras"] },
-  { key: "certification", number: "05", title: "Certificações", area: "Qualidade & Engenharia", color: "red", tasks: ["Definir certificações aplicáveis", "Preparar documentação técnica", "Disparar processo de certificação", "Acompanhar ensaios e pendências"] },
-  { key: "design", number: "06", title: "Design e apresentação", area: "Produto & Marketing", color: "pink", tasks: ["Desenvolver identidade e aplicação da marca", "Definir embalagem e proteção do produto", "Desenvolver etiquetas e informações obrigatórias", "Validar apresentação final ao cliente"] },
-  { key: "industrialization", number: "07", title: "Codificação e industrialização", area: "Engenharia de Produtos", color: "indigo", tasks: ["Definir sequência de código interno", "Reservar código e solicitar estrutura", "Vincular matérias-primas, insumos e embalagem", "Realizar análise e liberar avanço", "Registrar condições e preços de compra", "Incluir item na tabela de preços", "Registrar previsão de chegada", "Validar preço final com a Diretoria", "Liberar movimentações e planejamento interno"] },
-  { key: "documentation", number: "08", title: "Documentação do produto", area: "NPI & Engenharia", color: "green", tasks: ["Preencher subsídios de NPI", "Aprovar início da análise documental", "Registrar previsão do NPI", "Validar e aprovar encerramento do NPI", "Preparar inspeção de recebimento", "Preparar especificação de compra", "Publicar datasheet", "Publicar manual do usuário quando aplicável"] },
-  { key: "launch", number: "09", title: "Lançamento e divulgação", area: "Marketing & Vendas", color: "orange", tasks: ["Preparar plano de lançamento", "Notificar internamente o novo produto", "Publicar produto no site", "Divulgar nas redes sociais", "Vincular produto à previsão do vendedor responsável"] },
-  { key: "monitoring", number: "10", title: "Monitoramento pós-lançamento", area: "Produto & Operações", color: "teal", tasks: ["Monitorar primeiras ordens e entregas", "Comparar resultado com demanda esperada", "Acompanhar margem e retorno", "Registrar feedback de clientes", "Manter backlog de documentação e melhorias"] },
-];
+import {
+  getCurrentStageKey,
+  getStageState,
+  WORKFLOW_STAGES as workflowStages,
+} from "@/lib/developmentWorkflow";
 
 const emptyProject = { productCode: "", requester: "", owner: "", targetLaunchDate: "", targetPrice: "", expectedDemand: "", potentialClients: "", marketPotential: "", technicalSpecs: "", developmentReason: "" };
 const emptyPackage = { name: "", supplier: "", currency: "BRL", dueDate: "" };
 const emptyPackageItem = { partNumber: "", sapCode: "", description: "", quantity: "", unitType: "", unitPrice: "", overhead: "", currency:"", exchangeRate:"", ncm:"", applyIpi:false, applyPis:false, applyCofins:false, applyIcms:false, applyImportTax:false };
 
 function FlowIcon({ name }) {
-  const paths = { spark: <path d="m12 3 1.4 4.6L18 9l-4.6 1.4L12 15l-1.4-4.6L6 9l4.6-1.4Z"/>, arrow: <path d="m9 18 6-6-6-6"/>, check: <path d="m5 12 4 4L19 6"/>, clock: <><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></>, chevron: <path d="m6 9 6 6 6-6"/>, back: <path d="m15 18-6-6 6-6"/> };
+  const paths = { spark: <path d="m12 3 1.4 4.6L18 9l-4.6 1.4L12 15l-1.4-4.6L6 9l4.6-1.4Z"/>, arrow: <path d="m9 18 6-6-6-6"/>, check: <path d="m5 12 4 4L19 6"/>, clock: <><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></>, chevron: <path d="m6 9 6 6 6-6"/>, lock: <><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></>, back: <path d="m15 18-6-6 6-6"/> };
   return <svg aria-hidden="true" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8">{paths[name]}</svg>;
 }
 
@@ -115,6 +107,9 @@ export default function NewProductsDashboard({ onOpenProducts }) {
   }), [projects, products, tasks]);
 
   const selectedProject = projectData.find((project) => project.id === selectedProjectId);
+  const selectedCurrentStageKey = selectedProject
+    ? getCurrentStageKey(selectedProject.projectTasks)
+    : null;
   const activeProjects = projectData.filter((project) => !project.archived_at);
   const archivedProjects = projectData.filter((project) => project.archived_at);
   const visibleProjects = showArchived ? archivedProjects : activeProjects;
@@ -127,6 +122,12 @@ export default function NewProductsDashboard({ onOpenProducts }) {
   const completedSlice = completedTasks / taskTotal * 100;
   const progressingSlice = (completedTasks + progressingTasks) / taskTotal * 100;
   const blockedSlice = (completedTasks + progressingTasks + blockedTasks) / taskTotal * 100;
+
+  useEffect(() => {
+    if (selectedCurrentStageKey) {
+      setExpandedStage(selectedCurrentStageKey);
+    }
+  }, [selectedProjectId, selectedCurrentStageKey]);
 
   async function createProject(event) {
     event.preventDefault(); const product = products.find((item) => item.code.toLowerCase() === form.productCode.trim().toLowerCase());
@@ -247,7 +248,181 @@ export default function NewProductsDashboard({ onOpenProducts }) {
       <section className="flow-project-info"><div><span>Solicitante</span><strong>{selectedProject.requester || "Não definido"}</strong></div><div><span>Responsável</span><strong>{selectedProject.owner || "Não definido"}</strong></div><div className="launch-date-editor"><span>Lançamento previsto</span><input type="date" value={selectedProject.target_launch_date || ""} onChange={(event)=>changeLaunchDate(event.target.value)} /><small>{launchHistory.filter((item)=>item.project_id===selectedProject.id).length} alterações registradas</small></div><div><span>Preço objetivo</span><strong>{selectedProject.target_price ? Number(selectedProject.target_price).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "Não definido"}</strong></div></section>
       {editingProject&&<section className="project-edit-panel"><header><div><span className="panel-kicker">Edição auditável</span><h2>Dados iniciais do desenvolvimento</h2></div><button onClick={()=>setEditingProject(false)}>Fechar</button></header><form onSubmit={saveProjectEdit}><label>Solicitante<input value={projectEdit.requester} onChange={e=>setProjectEdit({...projectEdit,requester:e.target.value})}/></label><label>Responsável<input value={projectEdit.owner} onChange={e=>setProjectEdit({...projectEdit,owner:e.target.value})}/></label><label>Lançamento previsto<input type="date" value={projectEdit.target_launch_date} onChange={e=>setProjectEdit({...projectEdit,target_launch_date:e.target.value})}/></label><label>Preço objetivo<input type="number" step=".01" value={projectEdit.target_price} onChange={e=>setProjectEdit({...projectEdit,target_price:e.target.value})}/></label>{[["expected_demand","Demanda esperada"],["potential_clients","Clientes potenciais"],["market_potential","Mercado potencial"],["technical_specs","Especificações técnicas"],["development_reason","Motivo e diferencial"]].map(([field,label])=><label className="wide" key={field}>{label}<textarea rows="2" value={projectEdit[field]} onChange={e=>setProjectEdit({...projectEdit,[field]:e.target.value})}/></label>)}<footer><small>{projectHistory.filter(item=>item.project_id===selectedProject.id).length} alterações registradas</small><button>Salvar alterações</button></footer></form></section>}
       {launchHistory.some((item)=>item.project_id===selectedProject.id)&&<details className="launch-history"><summary>Histórico da previsão de lançamento</summary>{launchHistory.filter((item)=>item.project_id===selectedProject.id).map((item)=><div key={item.id}><strong>{item.old_date||"Sem data"} → {item.new_date||"Sem data"}</strong><span>{item.reason}</span><small>{new Date(item.changed_at).toLocaleString("pt-BR")}</small></div>)}</details>}
-      <section className="flow-stage-list">{workflowStages.map((stage) => { const stageTasks=selectedProject.projectTasks.filter((task)=>task.stage_key===stage.key);const done=stageTasks.filter((task)=>["completed","not_applicable"].includes(task.status)).length;const open=expandedStage===stage.key;return <article className={`flow-stage ${open?"open":""}`} key={stage.key}><button className="flow-stage-header" onClick={()=>setExpandedStage(open?"":stage.key)}><span className={`flow-stage-number ${stage.color}`}>{stage.number}</span><div><strong>{stage.title}</strong><small>{stage.area}</small></div><div className="flow-stage-progress"><span>{done}/{stageTasks.length}</span><i><b style={{width:`${stageTasks.length?done/stageTasks.length*100:0}%`}}/></i></div><FlowIcon name="chevron"/></button>{open&&<div className="flow-task-list">{stageTasks.map((task)=><div className={`flow-task-wrap ${task.status}`} key={task.id}><div className="flow-task"><button className="flow-task-check" onClick={()=>updateTask(task,task.status==="completed"?"pending":"completed")}>{task.status==="completed"&&<FlowIcon name="check"/>}</button><span>{task.title}<small className="task-assignee">{task.assignee_name||task.owner_area||"Sem responsável"}</small></span><button className="task-assign-trigger" onClick={()=>assignTask(task)}>Atribuir</button><button className="task-detail-trigger" onClick={()=>setExpandedTaskId(expandedTaskId===task.id?null:task.id)}>Observações e anexos</button><select aria-label={`Status de ${task.title}`} value={task.status} onChange={(event)=>updateTask(task,event.target.value)}><option value="pending">Pendente</option><option value="in_progress">Em andamento</option><option value="blocked">Bloqueado</option><option value="completed">Concluído</option><option value="not_applicable">Não aplicável</option></select></div>{expandedTaskId===task.id&&<div className="task-evidence"><label>Observações<textarea rows="3" value={taskNotes[task.id]??task.notes??""} onChange={(event)=>setTaskNotes((current)=>({...current,[task.id]:event.target.value}))}/></label><button onClick={()=>saveTaskNote(task)}>Salvar observação</button><label>Anexar evidência<input type="file" onChange={(event)=>uploadTaskAttachment(task,event.target.files?.[0])}/></label><div>{taskAttachments.filter((item)=>item.task_id===task.id).map((item)=><a href={item.public_url} key={item.id} rel="noreferrer" target="_blank">{item.name}</a>)}</div></div>}</div>)}</div>}</article>;})}</section>
+      <section className="flow-stage-list">
+        {workflowStages.map((stage) => {
+          const stageTasks = selectedProject.projectTasks.filter(
+            (task) => task.stage_key === stage.key
+          );
+          const done = stageTasks.filter((task) =>
+            ["completed", "not_applicable"].includes(task.status)
+          ).length;
+          const stageState = getStageState(
+            selectedProject.projectTasks,
+            stage.key
+          );
+          const locked = stageState === "locked";
+          const open = !locked && expandedStage === stage.key;
+          const stageHint =
+            stageState === "current"
+              ? "Etapa atual"
+              : stageState === "completed"
+                ? "Etapa concluída"
+                : "Disponível após concluir a etapa anterior";
+
+          return (
+            <article
+              className={`flow-stage ${stageState} ${open ? "open" : ""}`}
+              key={stage.key}
+            >
+              <button
+                aria-expanded={open}
+                className="flow-stage-header"
+                disabled={locked}
+                onClick={() => setExpandedStage(open ? "" : stage.key)}
+                title={locked ? stageHint : undefined}
+                type="button"
+              >
+                <span className={`flow-stage-number ${stage.color}`}>
+                  {stage.number}
+                </span>
+                <div>
+                  <strong>{stage.title}</strong>
+                  <small>
+                    {stage.area} · {stageHint}
+                  </small>
+                </div>
+                <div className="flow-stage-progress">
+                  <span>{locked ? "Bloqueada" : `${done}/${stageTasks.length}`}</span>
+                  <i>
+                    <b
+                      style={{
+                        width: `${stageTasks.length ? (done / stageTasks.length) * 100 : 0}%`,
+                      }}
+                    />
+                  </i>
+                </div>
+                <FlowIcon name={locked ? "lock" : "chevron"} />
+              </button>
+
+              {open && (
+                <div className="flow-task-list">
+                  {stageTasks.map((task) => (
+                    <div
+                      className={`flow-task-wrap ${task.status}`}
+                      key={task.id}
+                    >
+                      <div className="flow-task">
+                        <button
+                          aria-label={`${task.status === "completed" ? "Reabrir" : "Concluir"} ${task.title}`}
+                          className="flow-task-check"
+                          onClick={() =>
+                            updateTask(
+                              task,
+                              task.status === "completed" ? "pending" : "completed"
+                            )
+                          }
+                          type="button"
+                        >
+                          {task.status === "completed" && <FlowIcon name="check" />}
+                        </button>
+                        <span>
+                          {task.title}
+                          <small className="task-assignee">
+                            {task.assignee_name ||
+                              task.owner_area ||
+                              "Sem responsável"}
+                          </small>
+                        </span>
+                        <button
+                          className="task-assign-trigger"
+                          onClick={() => assignTask(task)}
+                          type="button"
+                        >
+                          Atribuir
+                        </button>
+                        <button
+                          className="task-detail-trigger"
+                          onClick={() =>
+                            setExpandedTaskId(
+                              expandedTaskId === task.id ? null : task.id
+                            )
+                          }
+                          type="button"
+                        >
+                          Observações e anexos
+                        </button>
+                        <select
+                          aria-label={`Status de ${task.title}`}
+                          onChange={(event) =>
+                            updateTask(task, event.target.value)
+                          }
+                          value={task.status}
+                        >
+                          <option value="pending">Pendente</option>
+                          <option value="in_progress">Em andamento</option>
+                          <option value="blocked">Bloqueado</option>
+                          <option value="completed">Concluído</option>
+                          <option value="not_applicable">Não aplicável</option>
+                        </select>
+                      </div>
+
+                      {expandedTaskId === task.id && (
+                        <div className="task-evidence">
+                          <label>
+                            Observações
+                            <textarea
+                              onChange={(event) =>
+                                setTaskNotes((current) => ({
+                                  ...current,
+                                  [task.id]: event.target.value,
+                                }))
+                              }
+                              rows="3"
+                              value={taskNotes[task.id] ?? task.notes ?? ""}
+                            />
+                          </label>
+                          <button
+                            onClick={() => saveTaskNote(task)}
+                            type="button"
+                          >
+                            Salvar observação
+                          </button>
+                          <label>
+                            Anexar evidência
+                            <input
+                              onChange={(event) =>
+                                uploadTaskAttachment(
+                                  task,
+                                  event.target.files?.[0]
+                                )
+                              }
+                              type="file"
+                            />
+                          </label>
+                          <div>
+                            {taskAttachments
+                              .filter((item) => item.task_id === task.id)
+                              .map((item) => (
+                                <a
+                                  href={item.public_url}
+                                  key={item.id}
+                                  rel="noreferrer"
+                                  target="_blank"
+                                >
+                                  {item.name}
+                                </a>
+                              ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </article>
+          );
+        })}
+      </section>
     </main>
   );
 
