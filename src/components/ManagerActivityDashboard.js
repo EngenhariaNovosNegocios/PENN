@@ -2,23 +2,24 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import styles from "./ManagerActivityDashboard.module.css";
 
 const taskStatusLabels = {
   pending: "Pendente",
   in_progress: "Em andamento",
   blocked: "Bloqueado",
-  completed: "Concluido",
-  not_applicable: "Nao aplicavel",
+  completed: "Concluído",
+  not_applicable: "Não aplicável",
 };
 
 const priorityLabels = {
   baixa: "Baixa",
-  media: "Media",
+  media: "Média",
   alta: "Alta",
-  critica: "Critica",
+  critica: "Crítica",
 };
 
-function ManagerIcon({ name }) {
+function ManagerIcon({ name, className = "" }) {
   const paths = {
     chart: (
       <>
@@ -53,6 +54,7 @@ function ManagerIcon({ name }) {
   return (
     <svg
       aria-hidden="true"
+      className={className}
       fill="none"
       viewBox="0 0 24 24"
       stroke="currentColor"
@@ -137,11 +139,12 @@ export default function ManagerActivityDashboard({ onOpenIssues, onOpenProducts 
     const firstError =
       productsResult.error ??
       issuesResult.error ??
+      resolvedIssuesResult.error ??
       projectsResult.error ??
       tasksResult.error;
 
     if (firstError) {
-      setMessage(`Nao foi possivel carregar o painel: ${firstError.message}`);
+      setMessage(`Não foi possível carregar o painel: ${firstError.message}`);
     }
 
     setData({
@@ -199,89 +202,96 @@ export default function ManagerActivityDashboard({ onOpenIssues, onOpenProducts 
     return bScore - aScore;
   });
 
+  const kpis = [
+    {
+      key: "tasks",
+      label: "Tarefas abertas",
+      value: metrics.openTasks,
+      detail: `${metrics.overdueTasks} vencidas`,
+      icon: "clock",
+      tone: "blue",
+    },
+    {
+      key: "issues",
+      label: "Pendências abertas",
+      value: metrics.openIssues,
+      detail: `${metrics.criticalIssues} críticas`,
+      icon: "alert",
+      tone: "red",
+    },
+    {
+      key: "projects",
+      label: "Projetos ativos",
+      value: metrics.activeProjects,
+      detail: `${metrics.activeProducts} produtos ativos`,
+      icon: "chart",
+      tone: "violet",
+    },
+    {
+      key: "resolved",
+      label: "Resolvidas recentemente",
+      value: metrics.resolvedRecently,
+      detail: "Histórico mais recente",
+      icon: "check",
+      tone: "green",
+    },
+  ];
+
   return (
-    <main className="manager-page">
-      <section className="manager-hero">
+    <main className={styles.page}>
+      <section className={styles.hero}>
         <div>
           <span>Painel do gerente</span>
           <h1>Atividades em andamento</h1>
           <p>
-            Uma visao consolidada das pendencias, tarefas de desenvolvimento e
+            Uma visão consolidada das pendências, tarefas de desenvolvimento e
             projetos ativos do portal PENN.
           </p>
         </div>
-        <button onClick={loadActivities} type="button">
-          Atualizar
+        <button aria-label="Atualizar painel gerencial" disabled={loading} onClick={loadActivities} type="button">
+          {loading ? "Atualizando..." : "Atualizar"}
         </button>
       </section>
 
-      {message && <p className="manager-message">{message}</p>}
+      {message && <p className={styles.message}>{message}</p>}
 
-      <section className="manager-kpis" aria-label="Indicadores gerenciais">
-        <article>
-          <span className="manager-kpi-icon blue">
-            <ManagerIcon name="clock" />
-          </span>
-          <div>
-            <small>Tarefas abertas</small>
-            <strong>{loading ? "..." : metrics.openTasks}</strong>
-            <span>{metrics.overdueTasks} vencidas</span>
-          </div>
-        </article>
-        <article>
-          <span className="manager-kpi-icon red">
-            <ManagerIcon name="alert" />
-          </span>
-          <div>
-            <small>Pendencias abertas</small>
-            <strong>{loading ? "..." : metrics.openIssues}</strong>
-            <span>{metrics.criticalIssues} criticas</span>
-          </div>
-        </article>
-        <article>
-          <span className="manager-kpi-icon violet">
-            <ManagerIcon name="chart" />
-          </span>
-          <div>
-            <small>Projetos ativos</small>
-            <strong>{loading ? "..." : metrics.activeProjects}</strong>
-            <span>{metrics.activeProducts} produtos ativos</span>
-          </div>
-        </article>
-        <article>
-          <span className="manager-kpi-icon green">
-            <ManagerIcon name="check" />
-          </span>
-          <div>
-            <small>Resolvidas recentes</small>
-            <strong>{loading ? "..." : metrics.resolvedRecently}</strong>
-            <span>historico mais recente</span>
-          </div>
-        </article>
+      <section className={styles.kpis} aria-label="Indicadores gerenciais">
+        {kpis.map((kpi) => (
+          <article className={`${styles.kpiCard} ${styles[kpi.tone]}`} key={kpi.key}>
+            <span className={styles.kpiIcon}>
+              <ManagerIcon className={styles.icon} name={kpi.icon} />
+            </span>
+            <div className={styles.kpiCopy}>
+              <small>{kpi.label}</small>
+              <strong>{loading ? "—" : kpi.value}</strong>
+              <span>{kpi.detail}</span>
+            </div>
+          </article>
+        ))}
       </section>
 
-      <section className="manager-grid">
-        <article className="manager-panel">
+      <section className={styles.grid}>
+        <article className={styles.panel}>
           <header>
             <div>
               <span>Prioridade</span>
-              <h2>Pendencias que precisam de atencao</h2>
+              <h2>Pendências que precisam de atenção</h2>
             </div>
             <button onClick={onOpenIssues} type="button">
-              Abrir pendencias <ManagerIcon name="arrow" />
+              Abrir pendências <ManagerIcon className={styles.buttonIcon} name="arrow" />
             </button>
           </header>
 
-          <div className="manager-list">
+          <div className={styles.list}>
             {urgentIssues.slice(0, 8).map((issue) => (
               <button
-                className={isOverdue(issue.due_date) ? "overdue" : ""}
+                className={isOverdue(issue.due_date) ? styles.overdue : ""}
                 key={issue.id}
                 onClick={onOpenIssues}
                 type="button"
               >
-                <span className={`manager-priority ${issue.priority || "media"}`}>
-                  {priorityLabels[issue.priority] ?? "Media"}
+                <span className={`${styles.priority} ${styles[issue.priority || "media"]}`}>
+                  {priorityLabels[issue.priority] ?? "Média"}
                 </span>
                 <div>
                   <strong>{issue.product_code}</strong>
@@ -292,26 +302,26 @@ export default function ManagerActivityDashboard({ onOpenIssues, onOpenProducts 
             ))}
 
             {!loading && urgentIssues.length === 0 && (
-              <p className="manager-empty">Nenhuma pendencia aberta.</p>
+              <p className={styles.empty}>Nenhuma pendência aberta.</p>
             )}
           </div>
         </article>
 
-        <article className="manager-panel">
+        <article className={styles.panel}>
           <header>
             <div>
-              <span>Execucao</span>
+              <span>Execução</span>
               <h2>Tarefas de NPI em andamento</h2>
             </div>
           </header>
 
-          <div className="manager-list task-list">
+          <div className={styles.list}>
             {upcomingTasks.map((task) => (
               <div
-                className={isOverdue(task.due_date) ? "overdue" : ""}
+                className={isOverdue(task.due_date) ? styles.overdue : ""}
                 key={task.id}
               >
-                <span className={`task-status ${task.status}`}>
+                <span className={`${styles.status} ${styles[task.status]}`}>
                   {taskStatusLabels[task.status] ?? task.status}
                 </span>
                 <div>
@@ -319,7 +329,7 @@ export default function ManagerActivityDashboard({ onOpenIssues, onOpenProducts 
                   <small>
                     {task.product_development_projects?.products?.code ??
                       "Produto"}{" "}
-                    - {task.assignee_name || task.owner_area || "Sem responsavel"}
+                    - {task.assignee_name || task.owner_area || "Sem responsável"}
                   </small>
                 </div>
                 <time>{formatDate(task.due_date)}</time>
@@ -327,31 +337,31 @@ export default function ManagerActivityDashboard({ onOpenIssues, onOpenProducts 
             ))}
 
             {!loading && upcomingTasks.length === 0 && (
-              <p className="manager-empty">Nenhuma tarefa aberta.</p>
+              <p className={styles.empty}>Nenhuma tarefa aberta.</p>
             )}
           </div>
         </article>
 
-        <article className="manager-panel">
+        <article className={styles.panel}>
           <header>
             <div>
-              <span>Portfolio</span>
+              <span>Portfólio</span>
               <h2>Projetos ativos</h2>
             </div>
             <button onClick={onOpenProducts} type="button">
-              Ver produtos <ManagerIcon name="arrow" />
+              Ver produtos <ManagerIcon className={styles.buttonIcon} name="arrow" />
             </button>
           </header>
 
-          <div className="manager-projects">
+          <div className={styles.projects}>
             {data.projects.slice(0, 6).map((project) => (
               <button
                 key={project.id}
                 onClick={onOpenProducts}
                 type="button"
               >
-                <span className="project-symbol">
-                  <ManagerIcon name="box" />
+                <span className={styles.projectIcon}>
+                  <ManagerIcon className={styles.icon} name="box" />
                 </span>
                 <div>
                   <strong>{project.products?.code ?? "Produto"}</strong>
@@ -362,24 +372,24 @@ export default function ManagerActivityDashboard({ onOpenIssues, onOpenProducts 
             ))}
 
             {!loading && data.projects.length === 0 && (
-              <p className="manager-empty">Nenhum projeto ativo.</p>
+              <p className={styles.empty}>Nenhum projeto ativo.</p>
             )}
           </div>
         </article>
 
-        <article className="manager-panel">
+        <article className={styles.panel}>
           <header>
             <div>
-              <span>Historico</span>
+              <span>Histórico</span>
               <h2>Resolvidas recentemente</h2>
             </div>
           </header>
 
-          <div className="manager-resolved">
+          <div className={styles.resolved}>
             {data.resolvedIssues.map((issue) => (
               <div key={issue.id}>
-                <span className="resolved-icon">
-                  <ManagerIcon name="check" />
+                <span className={styles.resolvedIcon}>
+                  <ManagerIcon className={styles.icon} name="check" />
                 </span>
                 <div>
                   <strong>{issue.product_code}</strong>
@@ -395,7 +405,7 @@ export default function ManagerActivityDashboard({ onOpenIssues, onOpenProducts 
             ))}
 
             {!loading && data.resolvedIssues.length === 0 && (
-              <p className="manager-empty">Nenhuma resolucao recente.</p>
+              <p className={styles.empty}>Nenhuma resolução recente.</p>
             )}
           </div>
         </article>

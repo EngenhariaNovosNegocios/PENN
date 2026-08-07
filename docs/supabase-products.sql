@@ -730,6 +730,7 @@ $$;
 grant execute on function public.is_authorized_user(text) to anon, authenticated;
 grant execute on function public.current_user_access_role() to authenticated;
 grant select, insert, update on public.authorized_users to authenticated;
+grant usage, select on sequence public.authorized_users_id_seq to authenticated;
 
 drop policy if exists "authorized_users_select" on public.authorized_users;
 drop policy if exists "authorized_users_insert" on public.authorized_users;
@@ -741,18 +742,18 @@ for select
 to authenticated
 using (
   email = lower(auth.jwt()->>'email')
-  or public.current_user_access_role() in ('gerente','admin')
+  or public.current_user_access_role() = 'admin'
 );
 
 create policy "authorized_users_insert"
 on public.authorized_users
 for insert
 to authenticated
-with check (public.current_user_access_role() in ('gerente','admin'));
+with check (public.current_user_access_role() = 'admin');
 
 create policy "authorized_users_update"
 on public.authorized_users
 for update
 to authenticated
-using (public.current_user_access_role() in ('gerente','admin'))
-with check (public.current_user_access_role() in ('gerente','admin'));
+using (public.current_user_access_role() = 'admin')
+with check (public.current_user_access_role() = 'admin');

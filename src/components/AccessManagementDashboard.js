@@ -96,10 +96,7 @@ export default function AccessManagementDashboard() {
     loadUsers();
   }, []);
 
-  const canManage = useMemo(
-    () => ["gerente", "admin"].includes(currentUser?.role),
-    [currentUser]
-  );
+  const canManage = useMemo(() => currentUser?.role === "admin", [currentUser]);
 
   function updateField(event) {
     const { name, value } = event.target;
@@ -159,6 +156,15 @@ export default function AccessManagementDashboard() {
 
     if (
       user.email === currentUser?.email &&
+      changes.role &&
+      changes.role !== "admin"
+    ) {
+      setMessage("Voce nao pode remover o proprio perfil admin.");
+      return;
+    }
+
+    if (
+      user.email === currentUser?.email &&
       Object.prototype.hasOwnProperty.call(changes, "active") &&
       changes.active === false
     ) {
@@ -213,7 +219,7 @@ export default function AccessManagementDashboard() {
 
           {!canManage && !loading && (
             <p className="access-warning">
-              Apenas perfis gerente ou admin podem cadastrar novas pessoas.
+              Apenas perfis admin podem cadastrar novas pessoas.
             </p>
           )}
 
@@ -293,7 +299,7 @@ export default function AccessManagementDashboard() {
                   <small>{user.area || "Sem area"}</small>
                 </div>
                 <select
-                  disabled={!canManage}
+                  disabled={!canManage || user.email === currentUser?.email}
                   onChange={(event) =>
                     updateUser(user, { role: event.target.value })
                   }

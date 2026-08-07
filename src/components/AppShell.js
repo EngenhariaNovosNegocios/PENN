@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import OverviewDashboard from "@/components/OverviewDashboard";
 import NewProductsDashboard from "@/components/NewProductsDashboard";
 import IssuesDashboard from "@/components/IssuesDashboard";
@@ -8,6 +8,8 @@ import StrategicIntelligenceDashboard from "@/components/StrategicIntelligenceDa
 import UserProfileDashboard from "@/components/UserProfileDashboard";
 import ManagerActivityDashboard from "@/components/ManagerActivityDashboard";
 import AccessManagementDashboard from "@/components/AccessManagementDashboard";
+import IndicatorsDashboard from "@/components/IndicatorsDashboard";
+import ReportsDashboard from "@/components/ReportsDashboard";
 import { supabase } from "@/lib/supabaseClient";
 
 const pageTitles = {
@@ -18,8 +20,24 @@ const pageTitles = {
   issues: "Pendencias",
   manager: "Gerencia",
   access: "Acessos",
+  indicators: "Indicadores",
+  reports: "Relatorios",
   profile: "Minhas tarefas",
 };
+
+const roleLevels = {
+  colaborador: 1,
+  gerente: 2,
+  admin: 3,
+};
+
+function hasMinimumRole(currentRole, minimumRole) {
+  if (!minimumRole) {
+    return true;
+  }
+
+  return (roleLevels[currentRole] ?? 0) >= (roleLevels[minimumRole] ?? 0);
+}
 
 function getInitials(nameOrEmail) {
   const value = nameOrEmail || "Usuario";
@@ -31,12 +49,12 @@ async function getPortalIdentity(user) {
   const email = user?.email?.toLowerCase() ?? "";
 
   if (!email) {
-    return { email: "", name: "Equipe PENN" };
+    return { email: "", name: "Equipe PENN", role: "colaborador" };
   }
 
   const { data } = await supabase
     .from("authorized_users")
-    .select("full_name,email")
+    .select("full_name,email,role")
     .eq("email", email)
     .maybeSingle();
 
@@ -47,6 +65,7 @@ async function getPortalIdentity(user) {
       user.user_metadata?.full_name ||
       email.split("@")[0] ||
       "Usuario",
+    role: data?.role || "colaborador",
   };
 }
 
@@ -163,11 +182,16 @@ const navigation = [
   { id: "new-products", label: "Novos produtos", icon: "spark" },
   { id: "intelligence", label: "Inteligencia NPI", icon: "brain" },
   { id: "issues", label: "Pendencias", icon: "alert" },
-  { id: "manager", label: "Gerencia", icon: "manager" },
-  { id: "access", label: "Acessos", icon: "users" },
-  { label: "Indicadores", icon: "chart", disabled: true },
-  { label: "Relatorios", icon: "file", disabled: true },
+  { id: "manager", label: "Gerencia", icon: "manager", minimumRole: "gerente" },
+  { id: "access", label: "Acessos", icon: "users", minimumRole: "admin" },
+  { id: "indicators", label: "Indicadores", icon: "chart" },
+  { id: "reports", label: "Relatorios", icon: "file" },
 ];
+
+function canAccessPage(role, pageId) {
+  const page = navigation.find((item) => item.id === pageId);
+  return hasMinimumRole(role, page?.minimumRole);
+}
 
 export default function AppShell({ children }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -176,7 +200,17 @@ export default function AppShell({ children }) {
   const [overdueTasks, setOverdueTasks] = useState([]);
   const [profileName, setProfileName] = useState("Equipe PENN");
   const [userEmail, setUserEmail] = useState("");
+  const [accessRole, setAccessRole] = useState("colaborador");
+  const [roleLoaded, setRoleLoaded] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState([]);
+
+  const visibleNavigation = useMemo(
+    () =>
+      navigation.filter((item) =>
+        hasMinimumRole(accessRole, item.minimumRole)
+      ),
+    [accessRole]
+  );
 
   useEffect(() => {
     async function loadNotifications() {
@@ -193,6 +227,8 @@ export default function AppShell({ children }) {
 
       setProfileName(identity.name);
       setUserEmail(identity.email);
+      setAccessRole(identity.role);
+      setRoleLoaded(true);
       setOverdueTasks(
         (data ?? []).filter(
           (task) =>
@@ -210,6 +246,12 @@ export default function AppShell({ children }) {
     return () =>
       window.removeEventListener("penn:tasks-changed", loadNotifications);
   }, []);
+
+  useEffect(() => {
+    if (roleLoaded && !canAccessPage(accessRole, activePage)) {
+      setActivePage("overview");
+    }
+  }, [accessRole, activePage, roleLoaded]);
 
   useEffect(() => {
     let channel;
@@ -277,7 +319,7 @@ export default function AppShell({ children }) {
   }
 
   function openPage(pageId) {
-    if (pageId) {
+    if (pageId && canAccessPage(accessRole, pageId)) {
       setActivePage(pageId);
     }
     setMenuOpen(false);
@@ -317,7 +359,7 @@ export default function AppShell({ children }) {
           </button>
 
           <span className="nav-section-label">Workspace</span>
-          {navigation.map((item) => (
+          {visibleNavigation.map((item) => (
             <button
               className={`nav-item ${activePage === item.id ? "active" : ""}`}
               disabled={item.disabled}
@@ -347,7 +389,7 @@ export default function AppShell({ children }) {
             onClick={() => openPage("profile")}
             type="button"
           >
-            <span className="avatar">{profileName.slice(0, 2).toUpperCase()}</span>
+            <span className="avatar">{getInitials(profileName).toUpperCase()}</span>
             <span>
               <strong>{profileName}</strong>
               <small>{userEmail || "Meu perfil e pendencias"}</small>
@@ -387,7 +429,7 @@ export default function AppShell({ children }) {
           <div className="breadcrumb">
             <span>Portal PENN</span>
             <b>/</b>
-            <strong>{pageTitles[activePage]}</strong>
+            <strong>{pageTitles[activePage] ?? pageTitles.overview}</strong>
           </div>
           <div className="topbar-actions">
             <span className="environment">
@@ -476,14 +518,24 @@ export default function AppShell({ children }) {
               }}
             />
           </section>
-          <section className="app-page" hidden={activePage !== "manager"}>
-            <ManagerActivityDashboard
-              onOpenIssues={() => openPage("issues")}
-              onOpenProducts={() => openPage("products")}
-            />
+          {canAccessPage(accessRole, "manager") && (
+            <section className="app-page" hidden={activePage !== "manager"}>
+              <ManagerActivityDashboard
+                onOpenIssues={() => openPage("issues")}
+                onOpenProducts={() => openPage("products")}
+              />
+            </section>
+          )}
+          {canAccessPage(accessRole, "access") && (
+            <section className="app-page" hidden={activePage !== "access"}>
+              <AccessManagementDashboard />
+            </section>
+          )}
+          <section className="app-page" hidden={activePage !== "indicators"}>
+            <IndicatorsDashboard />
           </section>
-          <section className="app-page" hidden={activePage !== "access"}>
-            <AccessManagementDashboard />
+          <section className="app-page" hidden={activePage !== "reports"}>
+            <ReportsDashboard />
           </section>
           <section className="app-page" hidden={activePage !== "profile"}>
             <UserProfileDashboard />
