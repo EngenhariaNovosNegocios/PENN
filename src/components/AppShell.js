@@ -8,6 +8,7 @@ import StrategicIntelligenceDashboard from "@/components/StrategicIntelligenceDa
 import UserProfileDashboard from "@/components/UserProfileDashboard";
 import ManagerActivityDashboard from "@/components/ManagerActivityDashboard";
 import AccessManagementDashboard from "@/components/AccessManagementDashboard";
+import ConnectedUserOverlay from "@/components/ConnectedUserOverlay";
 import { isAssignedTo } from "@/lib/assignee";
 import { getCurrentStageTasks } from "@/lib/developmentWorkflow";
 import { supabase } from "@/lib/supabaseClient";
@@ -205,11 +206,13 @@ export default function AppShell({ children }) {
   const [activePage, setActivePage] = useState("overview");
   const [overdueTasks, setOverdueTasks] = useState([]);
   const [assignedIssueCount, setAssignedIssueCount] = useState(0);
+  const [personalTaskCount, setPersonalTaskCount] = useState(0);
   const [profileName, setProfileName] = useState("Equipe PENN");
   const [userEmail, setUserEmail] = useState("");
   const [accessRole, setAccessRole] = useState("colaborador");
   const [roleLoaded, setRoleLoaded] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState([]);
+  const [selectedOnlineUser, setSelectedOnlineUser] = useState(null);
 
   const visibleNavigation = useMemo(
     () =>
@@ -226,7 +229,7 @@ export default function AppShell({ children }) {
       } = await supabase.auth.getUser();
       const identity = await getPortalIdentity(user);
       const today = new Date().toISOString().slice(0, 10);
-      const [tasksResult, issuesResult] = await Promise.all([
+      const [tasksResult, issuesResult, personalTasksResult] = await Promise.all([
         supabase
           .from("product_development_tasks")
           .select(
@@ -236,6 +239,13 @@ export default function AppShell({ children }) {
           .from("product_issues")
           .select("id,assignee_name,assignee_email")
           .is("resolved_at", null),
+        user?.id
+          ? supabase
+              .from("personal_tasks")
+              .select("id", { count: "exact", head: true })
+              .eq("user_id", user.id)
+              .is("completed_at", null)
+          : Promise.resolve({ count: 0 }),
       ]);
 
       const currentStageTasks = getCurrentStageTasks(
@@ -253,6 +263,7 @@ export default function AppShell({ children }) {
           isAssignedTo(issue, identity)
         ).length
       );
+      setPersonalTaskCount(personalTasksResult.count ?? 0);
       setOverdueTasks(
         currentStageTasks.filter(
           (task) =>
@@ -266,13 +277,16 @@ export default function AppShell({ children }) {
     loadNotifications();
     window.addEventListener("penn:tasks-changed", loadNotifications);
     window.addEventListener("penn:issues-changed", loadNotifications);
+    window.addEventListener("penn:personal-tasks-changed", loadNotifications);
     return () => {
       window.removeEventListener("penn:tasks-changed", loadNotifications);
       window.removeEventListener("penn:issues-changed", loadNotifications);
+      window.removeEventListener("penn:personal-tasks-changed", loadNotifications);
     };
   }, []);
 
-  const profileAlertCount = overdueTasks.length + assignedIssueCount;
+  const profileAlertCount =
+    overdueTasks.length + assignedIssueCount + personalTaskCount;
 
   useEffect(() => {
     if (roleLoaded && !canAccessPage(accessRole, activePage)) {
@@ -317,6 +331,11 @@ export default function AppShell({ children }) {
           new Map(users.map((presence) => [presence.id, presence])).values()
         );
         setOnlineUsers(uniqueUsers);
+        setSelectedOnlineUser((current) =>
+          current
+            ? uniqueUsers.find((presence) => presence.id === current.id) ?? null
+            : null
+        );
       });
 
       channel.subscribe(async (status) => {
@@ -381,6 +400,23 @@ export default function AppShell({ children }) {
         window.dispatchEvent(
           new CustomEvent("penn:open-development-task", {
             detail: task,
+          })
+        ),
+      0
+    );
+  }
+
+  function openAssignedIssue(issue) {
+    if (!issue?.issueId) {
+      return;
+    }
+
+    openPage("issues");
+    window.setTimeout(
+      () =>
+        window.dispatchEvent(
+          new CustomEvent("penn:open-issue", {
+            detail: issue,
           })
         ),
       0
@@ -503,29 +539,20 @@ export default function AppShell({ children }) {
             <span className="environment">
               <i /> Ambiente interno
             </span>
-            <button
-              aria-label={`${profileAlertCount} itens que precisam da sua atenção`}
-              className={`notification ${profileAlertCount ? "has-alert" : ""}`}
-              onClick={() => openPage("profile")}
-              type="button"
-            >
-              !
-              {profileAlertCount > 0 && <b>{profileAlertCount}</b>}
-            </button>
-            <button className="logout-button" onClick={signOut} type="button">
-              Sair
-            </button>
             {onlineUsers.length > 0 && (
               <div className="presence-stack" aria-label="Pessoas conectadas">
                 {onlineUsers.slice(0, 6).map((user) => (
-                  <span
+                  <button
+                    aria-label={`Abrir perfil de ${user.fullName || user.email}`}
                     className="presence-avatar"
                     data-name={user.fullName || user.email}
                     key={user.id}
+                    onClick={() => setSelectedOnlineUser(user)}
                     title={user.fullName || user.email}
+                    type="button"
                   >
                     {getInitials(user.fullName || user.email).toUpperCase()}
-                  </span>
+                  </button>
                 ))}
                 {onlineUsers.length > 6 && (
                   <span
@@ -538,6 +565,9 @@ export default function AppShell({ children }) {
                 )}
               </div>
             )}
+            <button className="logout-button" onClick={signOut} type="button">
+              Sair
+            </button>
           </div>
         </header>
 
@@ -575,10 +605,18 @@ export default function AppShell({ children }) {
             </section>
           )}
           <section className="app-page" hidden={activePage !== "profile"}>
-            <UserProfileDashboard />
+            <UserProfileDashboard
+              onOpenDevelopmentTask={openDevelopmentTask}
+              onOpenIssue={openAssignedIssue}
+            />
           </section>
         </div>
       </section>
+      <ConnectedUserOverlay
+        onClose={() => setSelectedOnlineUser(null)}
+        onOpenIssue={openAssignedIssue}
+        user={selectedOnlineUser}
+      />
     </div>
   );
 }

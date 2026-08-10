@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import FormModal from "@/components/FormModal";
 import { supabase } from "@/lib/supabaseClient";
 
 const emptyForm = { productCode: "", description: "", priority: "media", dueDate: "", assigneeEmail: "" };
@@ -28,10 +29,13 @@ export default function IssuesDashboard({ onOpenProduct }) {
   const [profiles, setProfiles] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
+  const [registerOpen, setRegisterOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [loadingError, setLoadingError] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("todos");
   const [boardView, setBoardView] = useState("active");
+  const [highlightedIssueId, setHighlightedIssueId] = useState(null);
+  const [issueNavigationRequest, setIssueNavigationRequest] = useState(0);
 
   async function loadData() {
     const [productsResult, issuesResult, resolvedResult, profilesResult] = await Promise.all([
@@ -56,6 +60,45 @@ export default function IssuesDashboard({ onOpenProduct }) {
   }
 
   useEffect(() => { const refresh = () => loadData(); loadData(); window.addEventListener("penn:issues-changed", refresh); return () => window.removeEventListener("penn:issues-changed", refresh); }, []);
+
+  useEffect(() => {
+    function openIssue(event) {
+      const issueId = Number(event.detail?.issueId);
+
+      if (!issueId) {
+        return;
+      }
+
+      setBoardView("active");
+      setPriorityFilter("todos");
+      setHighlightedIssueId(issueId);
+      setIssueNavigationRequest((current) => current + 1);
+    }
+
+    window.addEventListener("penn:open-issue", openIssue);
+    return () => window.removeEventListener("penn:open-issue", openIssue);
+  }, []);
+
+  useEffect(() => {
+    if (!highlightedIssueId || boardView !== "active") {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => {
+      const target = document.getElementById(`product-issue-${highlightedIssueId}`);
+
+      target?.focus({ preventScroll: true });
+      target?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 120);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    boardView,
+    highlightedIssueId,
+    issueNavigationRequest,
+    issues.length,
+    priorityFilter,
+  ]);
 
   async function resolveIssue(issue) {
     const note = window.prompt("Descreva como a pendência foi resolvida (mínimo de 10 caracteres):");
@@ -87,7 +130,7 @@ export default function IssuesDashboard({ onOpenProduct }) {
     await supabase.from("products").update({ status: "manutencao" }).eq("id", product.id);
     setIssues((current) => [data, ...current]);
     setProducts((current) => current.map((item) => item.id === product.id ? { ...item, status: "manutencao" } : item));
-    setForm(emptyForm); setSubmitting(false); setMessage("Problema registrado com sucesso.");
+    setForm(emptyForm); setSubmitting(false); setRegisterOpen(false); setMessage("Problema registrado com sucesso.");
     window.dispatchEvent(new CustomEvent("penn:issues-changed"));
   }
 
@@ -100,18 +143,28 @@ export default function IssuesDashboard({ onOpenProduct }) {
     <main className="issues-page">
       <section className="issues-hero"><div><span><IssueIcon name="alert"/> Central de ocorrências</span><h1>Pendências de produtos</h1><p>Registre, priorize e acompanhe impedimentos de todo o portfólio em um único lugar.</p></div><div className="issues-hero-stats"><div><strong>{issues.length}</strong><span>abertas</span></div><div><strong>{overdue}</strong><span>atrasadas</span></div><div><strong>{critical}</strong><span>críticas</span></div></div></section>
 
-      <section className="issue-register-panel">
-        <header><span className="issue-register-icon"><IssueIcon name="plus"/></span><div><span className="panel-kicker">Nova ocorrência</span><h2>Registrar problema</h2></div></header>
-        <form onSubmit={registerIssue}>
-          <label>Código do produto<input list="product-codes" required value={form.productCode} onChange={(event) => setForm({ ...form, productCode: event.target.value })} placeholder="Ex.: PENN-001"/><datalist id="product-codes">{products.map((product) => <option key={product.id} value={product.code}>{product.name}</option>)}</datalist></label>
-          <label className="issue-description-field">Descrição da pendência<textarea minLength="10" required rows="3" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Descreva claramente a pendência encontrada (mínimo de 10 caracteres)..."/></label>
-          <label className="issue-assignee-field">Responsável<select required value={form.assigneeEmail} onChange={event=>setForm({...form,assigneeEmail:event.target.value})}><option value="">Selecione pelo nome</option>{profiles.map(profile=><option key={profile.id} value={profile.email}>{profile.full_name}</option>)}</select></label>
-          <label className="issue-due-field">Prazo para resolução<input required type="date" value={form.dueDate} onChange={(event) => setForm({ ...form, dueDate: event.target.value })}/></label>
-          <label className="issue-priority-field">Prioridade<select value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })}>{Object.entries(priorityMeta).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}</select></label>
-          <div className="issue-form-action"><button disabled={submitting}><IssueIcon name="plus"/>{submitting ? "Registrando..." : "Registrar problema"}</button></div>
-        </form>
-        {message && <p className={message.includes("sucesso") ? "issue-form-message success" : "issue-form-message"}>{message}</p>}
+      <section className="issues-create-bar">
+        <div><span className="panel-kicker">Registro rápido</span><strong>Encontrou um impedimento em um produto?</strong></div>
+        <button onClick={() => setRegisterOpen(true)} type="button"><IssueIcon name="plus"/>Registrar nova pendência</button>
       </section>
+      {message && <p className={message.includes("sucesso") || message.includes("histórico") ? "issue-form-message success" : "issue-form-message"}>{message}</p>}
+
+      <FormModal
+        description="A ocorrência ficará vinculada ao produto e aparecerá automaticamente no perfil da pessoa responsável."
+        eyebrow="Nova ocorrência"
+        onClose={() => setRegisterOpen(false)}
+        open={registerOpen}
+        title="Registrar pendência"
+      >
+        <form className="modal-form issue-modal-form" onSubmit={registerIssue}>
+          <label>Código do produto<input autoFocus list="product-codes" required value={form.productCode} onChange={(event) => setForm({ ...form, productCode: event.target.value })} placeholder="Ex.: PENN-001"/><datalist id="product-codes">{products.map((product) => <option key={product.id} value={product.code}>{product.name}</option>)}</datalist></label>
+          <label>Responsável<select required value={form.assigneeEmail} onChange={event=>setForm({...form,assigneeEmail:event.target.value})}><option value="">Selecione pelo nome</option>{profiles.map(profile=><option key={profile.id} value={profile.email}>{profile.full_name}</option>)}</select></label>
+          <label className="wide">Descrição da pendência<textarea minLength="10" required rows="4" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Descreva claramente a pendência encontrada (mínimo de 10 caracteres)..."/></label>
+          <label>Prazo para resolução<input required type="date" value={form.dueDate} onChange={(event) => setForm({ ...form, dueDate: event.target.value })}/></label>
+          <label>Prioridade<select value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })}>{Object.entries(priorityMeta).map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}</select></label>
+          <footer className="modal-form-actions"><button onClick={() => setRegisterOpen(false)} type="button">Cancelar</button><button disabled={submitting} type="submit"><IssueIcon name="plus"/>{submitting ? "Registrando..." : "Registrar pendência"}</button></footer>
+        </form>
+      </FormModal>
 
       <section className="issues-board">
         {loadingError && <div className="issues-load-error"><span>{loadingError}</span><button onClick={loadData}>Tentar novamente</button></div>}
@@ -125,7 +178,7 @@ export default function IssuesDashboard({ onOpenProduct }) {
                 <div><strong>{product.code}</strong><h3>{product.name}</h3></div>
                 <span>{productIssues.length} {productIssues.length === 1 ? "pendência" : "pendências"}</span>
               </header>
-              <div>{productIssues.map((issue, index) => { const isOverdue = issue.due_date && new Date(`${issue.due_date}T23:59:59`) < new Date(); return <div className="global-issue-row" key={issue.id}><span className="issue-order">{String(index + 1).padStart(2,"0")}</span><div><strong>{issue.description}</strong><span><i className={`priority-dot ${priorityMeta[issue.priority]?.className || "medium"}`}/>{priorityMeta[issue.priority]?.label || "Média"}{issue.assignee_name ? ` · ${issue.assignee_name}` : ""}</span></div><span className={isOverdue ? "issue-deadline overdue" : "issue-deadline"}><IssueIcon name="calendar"/>{issue.due_date ? new Date(`${issue.due_date}T12:00:00`).toLocaleDateString("pt-BR") : "Sem prazo"}</span><button className="resolve-issue-button" onClick={() => resolveIssue(issue)}>Resolver</button></div>})}</div>
+              <div>{productIssues.map((issue, index) => { const isOverdue = issue.due_date && new Date(`${issue.due_date}T23:59:59`) < new Date(); const isTargeted = Number(issue.id) === highlightedIssueId; return <div className={`global-issue-row ${isTargeted ? "targeted" : ""}`} id={`product-issue-${issue.id}`} key={issue.id} tabIndex={isTargeted ? -1 : undefined}><span className="issue-order">{String(index + 1).padStart(2,"0")}</span><div><strong>{issue.description}</strong><span><i className={`priority-dot ${priorityMeta[issue.priority]?.className || "medium"}`}/>{priorityMeta[issue.priority]?.label || "Média"}{issue.assignee_name ? ` · ${issue.assignee_name}` : ""}</span></div><span className={isOverdue ? "issue-deadline overdue" : "issue-deadline"}><IssueIcon name="calendar"/>{issue.due_date ? new Date(`${issue.due_date}T12:00:00`).toLocaleDateString("pt-BR") : "Sem prazo"}</span><button className="resolve-issue-button" onClick={() => resolveIssue(issue)}>Resolver</button></div>})}</div>
             </article>
           ))}
           {groups.length === 0 && <div className="issues-empty"><IssueIcon name="alert"/><strong>Nenhuma pendência encontrada</strong><span>Não há ocorrências abertas com este filtro.</span></div>}

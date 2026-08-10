@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import FormModal from "@/components/FormModal";
 import { supabase } from "@/lib/supabaseClient";
 import SupplierDashboard from "@/components/SupplierDashboard";
 import SpreadsheetImport from "@/components/SpreadsheetImport";
@@ -22,6 +23,13 @@ const statusOptions = {
     label: "Pausado",
     description: "Produto temporariamente suspenso",
   },
+};
+
+const issuePriorityLabels = {
+  baixa: "Baixa",
+  media: "Média",
+  alta: "Alta",
+  critica: "Crítica",
 };
 
 const initialProducts = [
@@ -137,10 +145,17 @@ function formatMoney(value, currency) {
   });
 }
 
+function formatDateTime(value) {
+  return value
+    ? new Date(value).toLocaleString("pt-BR")
+    : "Data não informada";
+}
+
 export default function ProductManager() {
   const [products, setProducts] = useState([]);
   const [structureItems, setStructureItems] = useState([]);
   const [issues, setIssues] = useState([]);
+  const [resolvedIssues, setResolvedIssues] = useState([]);
   const [attachments, setAttachments] = useState([]);
   const [budgetItems, setBudgetItems] = useState([]);
   const [rawMaterials, setRawMaterials] = useState([]);
@@ -170,6 +185,14 @@ export default function ProductManager() {
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [createStep, setCreateStep] = useState("essential");
+  const [productCreateOpen, setProductCreateOpen] = useState(false);
+  const [rawMaterialOpen, setRawMaterialOpen] = useState(false);
+  const [structureOpen, setStructureOpen] = useState(false);
+  const [budgetOpen, setBudgetOpen] = useState(false);
+  const [attachmentOpen, setAttachmentOpen] = useState(false);
+  const [categoryOpen, setCategoryOpen] = useState(false);
+  const [categoryName, setCategoryName] = useState("");
+  const [categoryTarget, setCategoryTarget] = useState("create");
 
   useEffect(() => {
     async function loadProducts() {
@@ -248,12 +271,13 @@ export default function ProductManager() {
     if (productIds.length === 0) {
       setStructureItems([]);
       setIssues([]);
+      setResolvedIssues([]);
       setAttachments([]);
       setBudgetItems([]);
-      return { issues: [], structureItems: [], attachments: [], budgetItems: [] };
+      return { issues: [], resolvedIssues: [], structureItems: [], attachments: [], budgetItems: [] };
     }
 
-    const [structureResult, issuesResult, attachmentsResult, budgetResult] = await Promise.all([
+    const [structureResult, issuesResult, resolvedIssuesResult, attachmentsResult, budgetResult] = await Promise.all([
       supabase
         .from("product_structure_items")
         .select(structureColumns)
@@ -265,6 +289,12 @@ export default function ProductManager() {
         .in("product_id", productIds)
         .is("resolved_at", null)
         .order("created_at", { ascending: false }),
+      supabase
+        .from("product_issues")
+        .select(issueColumns)
+        .in("product_id", productIds)
+        .not("resolved_at", "is", null)
+        .order("resolved_at", { ascending: false }),
       supabase
         .from("product_attachments")
         .select(attachmentColumns)
@@ -281,15 +311,62 @@ export default function ProductManager() {
       ? []
       : structureResult.data ?? [];
     const nextIssues = issuesResult.error ? [] : issuesResult.data ?? [];
+    const nextResolvedIssues = resolvedIssuesResult.error
+      ? []
+      : resolvedIssuesResult.data ?? [];
     const nextAttachments = attachmentsResult.error ? [] : attachmentsResult.data ?? [];
     const nextBudgetItems = budgetResult.error ? [] : budgetResult.data ?? [];
 
     setStructureItems(nextStructureItems);
     setIssues(nextIssues);
+    setResolvedIssues(nextResolvedIssues);
     setAttachments(nextAttachments);
     setBudgetItems(nextBudgetItems);
-    return { issues: nextIssues, structureItems: nextStructureItems, attachments: nextAttachments, budgetItems: nextBudgetItems };
+    return { issues: nextIssues, resolvedIssues: nextResolvedIssues, structureItems: nextStructureItems, attachments: nextAttachments, budgetItems: nextBudgetItems };
   }
+
+  async function refreshProductIssues(productIds) {
+    if (!productIds.length) {
+      setIssues([]);
+      setResolvedIssues([]);
+      return;
+    }
+
+    const [openResult, resolvedResult] = await Promise.all([
+      supabase
+        .from("product_issues")
+        .select(issueColumns)
+        .in("product_id", productIds)
+        .is("resolved_at", null)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("product_issues")
+        .select(issueColumns)
+        .in("product_id", productIds)
+        .not("resolved_at", "is", null)
+        .order("resolved_at", { ascending: false }),
+    ]);
+
+    if (!openResult.error) {
+      setIssues(openResult.data ?? []);
+    }
+
+    if (!resolvedResult.error) {
+      setResolvedIssues(resolvedResult.data ?? []);
+    }
+  }
+
+  useEffect(() => {
+    if (!products.length) {
+      return undefined;
+    }
+
+    const productIds = products.map((product) => product.id);
+    const refresh = () => refreshProductIssues(productIds);
+
+    window.addEventListener("penn:issues-changed", refresh);
+    return () => window.removeEventListener("penn:issues-changed", refresh);
+  }, [products]);
 
   async function loadNcmTaxes() {
     const { data, error } = await supabase
@@ -312,13 +389,25 @@ export default function ProductManager() {
     setProductCategories(data ?? []);
   }
 
-  async function selectCategory(value, setter) {
+  function selectCategory(value, target) {
+    const setter = target === "edit" ? setEditForm : setForm;
     if (value !== "__new__") { setter((current) => ({ ...current, category: value })); return; }
-    const name = window.prompt("Nome da nova categoria:")?.trim();
+    setCategoryTarget(target);
+    setCategoryName("");
+    setCategoryOpen(true);
+  }
+
+  async function createCategory(event) {
+    event.preventDefault();
+    const name = categoryName.trim();
     if (!name) return;
     const { data, error } = await supabase.from("product_categories").insert({ name }).select("id, name").single();
     if (error) { setErrorMessage(`Nao foi possível criar a categoria: ${error.message}`); return; }
-    setProductCategories((current) => [...current, data].sort((a,b) => a.name.localeCompare(b.name))); setter((current) => ({ ...current, category: data.name }));
+    setProductCategories((current) => [...current, data].sort((a,b) => a.name.localeCompare(b.name)));
+    const setter = categoryTarget === "edit" ? setEditForm : setForm;
+    setter((current) => ({ ...current, category: data.name }));
+    setCategoryOpen(false);
+    showSuccess("Categoria cadastrada.");
   }
 
   const selectedStructureItems = useMemo(
@@ -332,6 +421,14 @@ export default function ProductManager() {
   const selectedIssues = useMemo(
     () => issues.filter((issue) => issue.product_id === selectedProduct?.id),
     [issues, selectedProduct]
+  );
+
+  const selectedResolvedIssues = useMemo(
+    () =>
+      resolvedIssues.filter(
+        (issue) => issue.product_id === selectedProduct?.id
+      ),
+    [resolvedIssues, selectedProduct]
   );
 
   const selectedDocuments = useMemo(
@@ -377,6 +474,24 @@ export default function ProductManager() {
 
   function openTab(tabId) {
     setActiveTab(tabId);
+  }
+
+  function navigateProductTabs(event, currentIndex) {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+      return;
+    }
+
+    event.preventDefault();
+    let nextIndex = currentIndex;
+
+    if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+    if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % tabs.length;
+    if (event.key === "Home") nextIndex = 0;
+    if (event.key === "End") nextIndex = tabs.length - 1;
+
+    const nextTab = tabs[nextIndex];
+    setActiveTab(nextTab.id);
+    document.getElementById(`product-tab-${nextTab.id}`)?.focus();
   }
 
   function updateFormField(setter) {
@@ -453,6 +568,7 @@ export default function ProductManager() {
     setForm(emptyForm);
     setCreateStep("essential");
     setIsSubmitting(false);
+    setProductCreateOpen(false);
     showSuccess("Produto cadastrado.");
   }
 
@@ -565,6 +681,9 @@ export default function ProductManager() {
     setIssues((current) =>
       current.filter((issue) => issue.product_id !== selectedProduct.id)
     );
+    setResolvedIssues((current) =>
+      current.filter((issue) => issue.product_id !== selectedProduct.id)
+    );
     setAttachments((current) =>
       current.filter((item) => item.product_id !== selectedProduct.id)
     );
@@ -621,6 +740,7 @@ export default function ProductManager() {
     setStructureItems((current) => [data, ...current]);
     setStructureForm(emptyStructureForm);
     setIsAddingStructure(false);
+    setStructureOpen(false);
     showSuccess("Item adicionado a estrutura.");
   }
 
@@ -653,9 +773,10 @@ export default function ProductManager() {
     setResolvingIssueId(issue.id);
     setErrorMessage("");
 
+    const resolvedAt = new Date().toISOString();
     const { error } = await supabase
       .from("product_issues")
-      .update({ resolution_note: resolutionNote, resolved_at: new Date().toISOString() })
+      .update({ resolution_note: resolutionNote, resolved_at: resolvedAt })
       .eq("id", issue.id);
 
     if (error) {
@@ -672,6 +793,10 @@ export default function ProductManager() {
     setIssues((current) =>
       current.filter((currentIssue) => currentIssue.id !== issue.id)
     );
+    setResolvedIssues((current) => [
+      { ...issue, resolution_note: resolutionNote, resolved_at: resolvedAt },
+      ...current.filter((currentIssue) => currentIssue.id !== issue.id),
+    ]);
     setResolutionNotes((current) => {
       const next = { ...current };
       delete next[issue.id];
@@ -703,7 +828,7 @@ export default function ProductManager() {
       mkp: Number(budgetItem.mkp || 1),
     }).select(budgetColumns).single();
     if (error) { setErrorMessage(`Nao foi possivel adicionar o item: ${error.message}`); setIsSavingBudget(false); return; }
-    setBudgetItems((current) => [data, ...current]); setBudgetItem(emptyBudgetItem); setIsSavingBudget(false); showSuccess("Item adicionado ao orçamento.");
+    setBudgetItems((current) => [data, ...current]); setBudgetItem(emptyBudgetItem); setIsSavingBudget(false); setBudgetOpen(false); showSuccess("Item adicionado ao orçamento.");
   }
 
   async function deleteBudgetItem(id) {
@@ -716,7 +841,7 @@ export default function ProductManager() {
     event.preventDefault();
     const { data, error } = await supabase.from("raw_materials").insert({ code: rawMaterialForm.code.trim().toUpperCase(), name: rawMaterialForm.name.trim(), unit_type: rawMaterialForm.unitType, is_provisional: false }).select("id, code, name, unit_type, is_provisional, created_at").single();
     if (error) { setErrorMessage(`Nao foi possivel cadastrar a matéria-prima: ${error.message}`); return; }
-    setRawMaterials((current) => [...current, data].sort((a,b) => a.code.localeCompare(b.code))); setRawMaterialForm(emptyRawMaterial); showSuccess("Matéria-prima cadastrada.");
+    setRawMaterials((current) => [...current, data].sort((a,b) => a.code.localeCompare(b.code))); setRawMaterialForm(emptyRawMaterial); setRawMaterialOpen(false); showSuccess("Matéria-prima cadastrada.");
   }
 
   async function approveBudgetItem(item) {
@@ -799,6 +924,7 @@ export default function ProductManager() {
     setDocumentFile(null);
     formElement.reset();
     setIsUploading(false);
+    setAttachmentOpen(false);
     showSuccess(kind === "photo" ? "Foto adicionada." : "Documento anexado.");
   }
 
@@ -885,7 +1011,7 @@ export default function ProductManager() {
             <span className="issue-overview">
               <strong>{issues.length}</strong> pendências abertas
             </span>
-            <button className="compact-add-product" onClick={() => setViewMode("create")} type="button">+ Produto</button>
+            <button className="compact-add-product" onClick={() => setProductCreateOpen(true)} type="button">+ Produto</button>
           </div>
 
           <div className="list-controls">
@@ -964,20 +1090,27 @@ export default function ProductManager() {
                 </div>
               </div>
 
-              <div className="detail-tabs" role="tablist" aria-label="Dados do produto">
-                {tabs.map((tab) => (
+              <nav className="product-detail-nav" role="tablist" aria-label="Dados do produto">
+                {tabs.map((tab, tabIndex) => (
                   <button
                     className={activeTab === tab.id ? "active" : ""}
                     aria-selected={activeTab === tab.id}
+                    id={`product-tab-${tab.id}`}
                     key={tab.id}
                     onClick={() => openTab(tab.id)}
+                    onKeyDown={(event) => navigateProductTabs(event, tabIndex)}
+                    role="tab"
+                    tabIndex={activeTab === tab.id ? 0 : -1}
                     type="button"
                   >
                     <ActionIcon name={tab.icon} />
                     <span>{tab.label}</span>
+                    {tab.id === "issues" && selectedIssues.length > 0 && (
+                      <small>{selectedIssues.length}</small>
+                    )}
                   </button>
                 ))}
-              </div>
+              </nav>
 
               {activeTab === "overview" && (
                 <section className="tab-panel" aria-label="Resumo do produto">
@@ -1000,7 +1133,10 @@ export default function ProductManager() {
                     </div>
                     <div>
                       <dt>Pendências</dt>
-                      <dd>{selectedIssues.length} abertos</dd>
+                      <dd>
+                        {selectedIssues.length} abertas ·{" "}
+                        {selectedResolvedIssues.length} resolvidas
+                      </dd>
                     </div>
                     <div>
                       <dt>Status</dt>
@@ -1049,7 +1185,7 @@ export default function ProductManager() {
 
                     <label>
                       Categoria
-                      <select value={editForm.category} onChange={(event) => selectCategory(event.target.value, setEditForm)}><option value="">Selecione</option>{productCategories.map((category)=><option key={category.id} value={category.name}>{category.name}</option>)}<option value="__new__">+ Adicionar categoria</option></select>
+                      <select value={editForm.category} onChange={(event) => selectCategory(event.target.value, "edit")}><option value="">Selecione</option>{productCategories.map((category)=><option key={category.id} value={category.name}>{category.name}</option>)}<option value="__new__">+ Adicionar categoria</option></select>
                     </label>
 
                     <label>
@@ -1092,47 +1228,16 @@ export default function ProductManager() {
 
               {activeTab === "structure" && (
                 <section className="tab-panel" aria-label="Estrutura do produto">
-                  <form className="compact-form" onSubmit={addStructureItem}>
-                    <label>
-                      Codigo materia prima
-                      <input
-                        list="raw-material-codes"
-                        name="materialCode"
-                        onChange={updateStructureField}
-                        placeholder="Ex.: MP-0001"
-                        required
-                        value={structureForm.materialCode}
-                      />
-                      <datalist id="raw-material-codes">{rawMaterials.map((material) => <option key={material.id} value={material.code}>{material.name}</option>)}</datalist>
-                    </label>
-                    <label>
-                      Descricao do item
-                      <input
-                        name="description"
-                        onChange={updateStructureField}
-                        placeholder="Ex.: Chapa inox 2mm"
-                        required
-                        value={structureForm.description}
-                      />
-                    </label>
-                    <label>
-                      Quantidade
-                      <input
-                        min="0.01"
-                        name="quantity"
-                        onChange={updateStructureField}
-                        placeholder="Ex.: 2"
-                        required
-                        step="0.01"
-                        type="number"
-                        value={structureForm.quantity}
-                      />
-                    </label>
-                    <button disabled={isAddingStructure} type="submit">
-                      <ActionIcon name="plus" />
-                      {isAddingStructure ? "Adicionando..." : "Adicionar"}
-                    </button>
-                  </form>
+                  <div className="tab-panel-add-bar"><div><strong>Estrutura do produto</strong><span>{selectedStructureItems.length} itens vinculados</span></div><button onClick={()=>setStructureOpen(true)} type="button"><ActionIcon name="plus"/>Adicionar matéria-prima</button></div>
+
+                  <FormModal description={`O item será vinculado à estrutura de ${selectedProduct.code}.`} eyebrow="Estrutura do produto" onClose={()=>setStructureOpen(false)} open={structureOpen} title="Adicionar matéria-prima">
+                    <form className="modal-form" onSubmit={addStructureItem}>
+                      <label className="wide">Código da matéria-prima<input autoFocus list="raw-material-codes" name="materialCode" onChange={updateStructureField} placeholder="Ex.: MP-0001" required value={structureForm.materialCode}/><datalist id="raw-material-codes">{rawMaterials.map((material) => <option key={material.id} value={material.code}>{material.name}</option>)}</datalist></label>
+                      <label>Descrição do item<input name="description" onChange={updateStructureField} placeholder="Ex.: Chapa inox 2mm" required value={structureForm.description}/></label>
+                      <label>Quantidade<input min="0.01" name="quantity" onChange={updateStructureField} placeholder="Ex.: 2" required step="0.01" type="number" value={structureForm.quantity}/></label>
+                      <footer className="modal-form-actions"><button onClick={()=>setStructureOpen(false)} type="button">Cancelar</button><button disabled={isAddingStructure} type="submit">{isAddingStructure ? "Adicionando..." : "Adicionar à estrutura"}</button></footer>
+                    </form>
+                  </FormModal>
 
                   <div className="data-list">
                     {selectedStructureItems.map((item) => (
@@ -1200,6 +1305,41 @@ export default function ProductManager() {
                       </p>
                     )}
                   </div>
+
+                  <section className="product-issue-history" aria-label="Histórico de pendências resolvidas">
+                    <header>
+                      <div>
+                        <span>Histórico do produto</span>
+                        <h3>Pendências resolvidas</h3>
+                      </div>
+                      <strong>{selectedResolvedIssues.length}</strong>
+                    </header>
+                    <div>
+                      {selectedResolvedIssues.map((issue) => (
+                        <article key={issue.id}>
+                          <span className="product-history-check">✓</span>
+                          <div>
+                            <strong>{issue.description}</strong>
+                            <small>
+                              Prioridade {issuePriorityLabels[issue.priority] || issue.priority} · criada em {formatDateTime(issue.created_at)}
+                            </small>
+                            <p>{issue.resolution_note || "Resolução não informada."}</p>
+                          </div>
+                          <time>
+                            <span>Resolvida em</span>
+                            <strong>{formatDateTime(issue.resolved_at)}</strong>
+                          </time>
+                        </article>
+                      ))}
+                      {selectedResolvedIssues.length === 0 && (
+                        <div className="product-history-empty">
+                          <span>✓</span>
+                          <strong>Nenhuma pendência resolvida</strong>
+                          <small>As resoluções deste produto aparecerão aqui.</small>
+                        </div>
+                      )}
+                    </div>
+                  </section>
                 </section>
               )}
 
@@ -1272,7 +1412,9 @@ export default function ProductManager() {
                       return <article key={currency}><span className="budget-currency-icon"><ActionIcon name="budget" /></span><div><small>Total em {currency}</small><strong>{formatMoney(total, currency)}</strong><span>{selectedBudgetItems.filter((item) => item.currency === currency).length} itens</span></div></article>;
                     })}
                   </div>
-                  <form className="budget-form" onSubmit={addBudgetItem}>
+                  <div className="tab-panel-add-bar"><div><strong>Composição do orçamento</strong><span>{selectedBudgetItems.length} itens cadastrados</span></div><button onClick={()=>setBudgetOpen(true)} type="button"><ActionIcon name="plus"/>Adicionar item</button></div>
+                  <FormModal description={`Inclua um custo no orçamento de ${selectedProduct.code}. O valor total considera quantidade, MKP e overhead.`} eyebrow="Orçamento do produto" onClose={()=>setBudgetOpen(false)} open={budgetOpen} size="large" title="Adicionar item ao orçamento">
+                  <form className="modal-form budget-modal-form" onSubmit={addBudgetItem}>
                     <div className="budget-form-heading"><span className="budget-currency-icon"><ActionIcon name="budget" /></span><div><strong>Novo item</strong><small>Valor unitário × quantidade × MKP + overhead</small></div></div>
                     <label>Código opcional<input value={budgetItem.itemCode} onChange={(e) => setBudgetItem({...budgetItem,itemCode:e.target.value})} placeholder="Ex.: MP-001" /></label>
                     <label>Nome do produto ou item<input required value={budgetItem.itemName} onChange={(e) => setBudgetItem({...budgetItem,itemName:e.target.value})} placeholder="Ex.: Fonte de alimentação" /></label>
@@ -1283,25 +1425,23 @@ export default function ProductManager() {
                     <label>MKP (multiplicador)<input min="0.01" required step="0.01" type="number" value={budgetItem.mkp} onChange={(e) => setBudgetItem({...budgetItem,mkp:e.target.value})} /></label>
                     <label>Overhead (%)<input min="0" required step="0.01" type="number" value={budgetItem.overheadRate} onChange={(e) => setBudgetItem({...budgetItem,overheadRate:e.target.value})} placeholder="0" /></label>
                     <div className="budget-preview"><small>Valor total do item</small><strong>{formatMoney(Number(budgetItem.amount || 0) * Number(budgetItem.quantity || 0) * Number(budgetItem.mkp || 0) * (1 + Number(budgetItem.overheadRate || 0) / 100), budgetItem.currency)}</strong><span>{budgetItem.quantity || 0} {budgetItem.unitType} × MKP {budgetItem.mkp || 0} × overhead {budgetItem.overheadRate || 0}%</span></div>
-                    <div className="budget-form-action"><button disabled={isSavingBudget} type="submit">{isSavingBudget ? "Adicionando..." : "Adicionar ao orçamento"}</button></div>
+                    <footer className="modal-form-actions"><button onClick={()=>setBudgetOpen(false)} type="button">Cancelar</button><button disabled={isSavingBudget} type="submit">{isSavingBudget ? "Adicionando..." : "Adicionar ao orçamento"}</button></footer>
                   </form>
+                  </FormModal>
                   <div className="budget-table"><header><span>Item</span><span>Qtd./Un.</span><span>Valor unit.</span><span>MKP</span><span>Overhead</span><span>Total</span><span>Ações</span></header>{selectedBudgetItems.map((item) => <div key={item.id}><span><strong>{item.item_name}</strong><small>{item.final_code || item.provisional_code || item.item_code || "Sem código"}</small></span><span>{Number(item.quantity).toLocaleString("pt-BR")} {item.unit_type}</span><span>{formatMoney(item.amount,item.currency)}</span><span>{Number(item.mkp).toLocaleString("pt-BR")}×</span><span>{Number(item.overhead_rate).toLocaleString("pt-BR")}%</span><strong>{formatMoney(Number(item.amount)*Number(item.quantity)*Number(item.mkp)*(1+Number(item.overhead_rate)/100),item.currency)}</strong><span className="budget-row-actions"><button className={item.approved?"approved":""} onClick={()=>approveBudgetItem(item)} type="button">{item.approved?"Aprovado":"Aprovar"}</button>{item.approved&&!item.structure_item_id&&<button onClick={()=>includeProvisionalStructure(item)} type="button">Incluir provisório</button>}{item.structure_item_id&&!item.final_code&&<button onClick={()=>promoteProvisionalCode(item)} type="button">Efetivar código</button>}<button aria-label={`Excluir ${item.item_name}`} onClick={()=>deleteBudgetItem(item.id)} type="button"><ActionIcon name="trash" /></button></span></div>)}{selectedBudgetItems.length===0&&<p className="empty-state">Nenhum item no orçamento deste produto.</p>}</div>
                 </section>
               )}
 
               {activeTab === "files" && (
                 <section className="tab-panel" aria-label="Documentos do produto">
-                  <form className="attachment-form" onSubmit={uploadAttachment}>
-                    <label>Tipo de documento
-                      <select value={documentType} onChange={(event) => setDocumentType(event.target.value)}>
-                        {documentTypes.map((type) => <option key={type} value={type}>{type}</option>)}
-                      </select>
-                    </label>
-                    <label>Arquivo
-                      <input accept={documentType === "Foto do produto" ? "image/*" : undefined} required type="file" onChange={(event) => setDocumentFile(event.target.files?.[0] ?? null)} />
-                    </label>
-                    <button disabled={isUploading} type="submit"><ActionIcon name="plus" />{isUploading ? "Enviando..." : "Anexar arquivo"}</button>
-                  </form>
+                  <div className="tab-panel-add-bar"><div><strong>Documentos e imagens</strong><span>{selectedDocuments.length + selectedPhotos.length} arquivos anexados</span></div><button onClick={()=>setAttachmentOpen(true)} type="button"><ActionIcon name="plus"/>Adicionar arquivo</button></div>
+                  <FormModal description="Selecione o tipo do conteúdo e o arquivo. Fotos serão exibidas na galeria com prévia automática." eyebrow="Arquivos do produto" onClose={()=>setAttachmentOpen(false)} open={attachmentOpen} title="Adicionar documento ou foto">
+                    <form className="modal-form" onSubmit={uploadAttachment}>
+                      <label>Tipo de conteúdo<select value={documentType} onChange={(event) => setDocumentType(event.target.value)}>{documentTypes.map((type) => <option key={type} value={type}>{type}</option>)}</select></label>
+                      <label>Arquivo<input accept={documentType === "Foto do produto" ? "image/*" : undefined} required type="file" onChange={(event) => setDocumentFile(event.target.files?.[0] ?? null)} /></label>
+                      <footer className="modal-form-actions"><button onClick={()=>setAttachmentOpen(false)} type="button">Cancelar</button><button disabled={isUploading} type="submit">{isUploading ? "Enviando..." : "Anexar arquivo"}</button></footer>
+                    </form>
+                  </FormModal>
                   <div className="attachment-list">
                     {selectedDocuments.map((item) => (
                       <article className="attachment-row" key={item.id}>
@@ -1339,13 +1479,7 @@ export default function ProductManager() {
 
       {viewMode === "materials" && (
         <section className="materials-manager panel">
-          <div className="panel-heading"><div><span className="form-step">Cadastro mestre</span><h2>Códigos de matéria-prima</h2></div><span>{rawMaterials.length} códigos</span></div>
-          <form className="materials-form" onSubmit={addRawMaterial}>
-            <label>Código<input required value={rawMaterialForm.code} onChange={(e)=>setRawMaterialForm({...rawMaterialForm,code:e.target.value})} placeholder="Ex.: MP-0001" /></label>
-            <label>Descrição<input required value={rawMaterialForm.name} onChange={(e)=>setRawMaterialForm({...rawMaterialForm,name:e.target.value})} placeholder="Ex.: Chapa inox 2mm" /></label>
-            <label>Unidade<select value={rawMaterialForm.unitType} onChange={(e)=>setRawMaterialForm({...rawMaterialForm,unitType:e.target.value})}>{["UN","PC","KIT","CX","KG","M","L","H"].map((unit)=><option key={unit}>{unit}</option>)}</select></label>
-            <button>Cadastrar matéria-prima</button>
-          </form>
+          <div className="panel-heading"><div><span className="form-step">Cadastro mestre</span><h2>Códigos de matéria-prima</h2></div><div className="panel-heading-actions"><span>{rawMaterials.length} códigos</span><button onClick={()=>setRawMaterialOpen(true)} type="button">+ Matéria-prima</button></div></div>
           <div className="materials-grid">{rawMaterials.map((material)=><article key={material.id}><a className="material-code material-code-link" href={`/materias-primas/${material.id}`} title="Ver histórico de cotações">{material.code}</a><div><strong>{material.name}</strong><small>{material.unit_type} · {material.is_provisional ? "Provisório" : "Código oficial"}</small></div><button className="material-edit-code" title="Editar código" aria-label={`Editar código ${material.code}`} onClick={async()=>{const code=window.prompt("Novo código da matéria-prima:",material.code)?.trim().toUpperCase();if(!code||code===material.code)return;const{data,error}=await supabase.from("raw_materials").update({code}).eq("id",material.id).select("id, code, name, unit_type, is_provisional, created_at").single();if(error){setErrorMessage(error.message);return}setRawMaterials(current=>current.map(item=>item.id===material.id?data:item));showSuccess("Código atualizado.")}} type="button"><ActionIcon name="edit" /></button></article>)}</div>
         </section>
       )}
@@ -1354,16 +1488,7 @@ export default function ProductManager() {
 
       {viewMode === "import" && <SpreadsheetImport onImported={() => window.setTimeout(() => window.location.reload(), 900)} />}
 
-      {viewMode === "create" && (
-      <section className="panel form-panel">
-        <div className="panel-heading">
-          <div>
-            <span className="form-step">Novo cadastro</span>
-            <h2>Novo produto</h2>
-          </div>
-          <span>Campos com * são obrigatórios</span>
-        </div>
-
+      <FormModal description="Cadastre a identificação principal e, se desejar, complete a classificação e os dados fiscais antes de salvar." eyebrow="Novo cadastro" onClose={()=>setProductCreateOpen(false)} open={productCreateOpen} size="large" title="Novo produto">
         <nav className="create-product-tabs" aria-label="Etapas do cadastro">
           <button className={createStep === "essential" ? "active" : ""} onClick={() => setCreateStep("essential")} type="button"><strong>1. Essencial</strong><small>Identificação e responsável</small></button>
           <button className={createStep === "classification" ? "active" : ""} onClick={() => setCreateStep("classification")} type="button"><strong>2. Classificação</strong><small>Status, características e NCM</small></button>
@@ -1403,7 +1528,7 @@ export default function ProductManager() {
 
           <label>
             Categoria
-            <select value={form.category} onChange={(event) => selectCategory(event.target.value, setForm)}><option value="">Selecione</option>{productCategories.map((category)=><option key={category.id} value={category.name}>{category.name}</option>)}<option value="__new__">+ Adicionar categoria</option></select>
+            <select value={form.category} onChange={(event) => selectCategory(event.target.value, "create")}><option value="">Selecione</option>{productCategories.map((category)=><option key={category.id} value={category.name}>{category.name}</option>)}<option value="__new__">+ Adicionar categoria</option></select>
           </label>
 
           <label>
@@ -1440,14 +1565,30 @@ export default function ProductManager() {
           </label>
           </>}
 
-          <div className="form-actions">
+          <div className="form-actions modal-form-actions">
+            <button onClick={()=>setProductCreateOpen(false)} type="button">Cancelar</button>
             <button disabled={isSubmitting} type="submit">
               {isSubmitting ? "Cadastrando..." : "Cadastrar produto"}
             </button>
           </div>
         </form>
-      </section>
-      )}
+      </FormModal>
+
+      <FormModal description="O código ficará disponível para estruturas de produtos, fornecedores e cotações." eyebrow="Cadastro mestre" onClose={()=>setRawMaterialOpen(false)} open={rawMaterialOpen} title="Nova matéria-prima">
+        <form className="modal-form" onSubmit={addRawMaterial}>
+          <label>Código<input autoFocus required value={rawMaterialForm.code} onChange={(e)=>setRawMaterialForm({...rawMaterialForm,code:e.target.value})} placeholder="Ex.: MP-0001" /></label>
+          <label>Unidade<select value={rawMaterialForm.unitType} onChange={(e)=>setRawMaterialForm({...rawMaterialForm,unitType:e.target.value})}>{["UN","PC","KIT","CX","KG","M","L","H"].map((unit)=><option key={unit}>{unit}</option>)}</select></label>
+          <label className="wide">Descrição<input required value={rawMaterialForm.name} onChange={(e)=>setRawMaterialForm({...rawMaterialForm,name:e.target.value})} placeholder="Ex.: Chapa inox 2mm" /></label>
+          <footer className="modal-form-actions"><button onClick={()=>setRawMaterialOpen(false)} type="button">Cancelar</button><button type="submit">Cadastrar matéria-prima</button></footer>
+        </form>
+      </FormModal>
+
+      <FormModal description="A nova categoria ficará disponível imediatamente nos filtros e cadastros de produtos." eyebrow="Classificação" onClose={()=>setCategoryOpen(false)} open={categoryOpen} size="small" title="Adicionar categoria">
+        <form className="modal-form" onSubmit={createCategory}>
+          <label className="wide">Nome da categoria<input autoFocus required value={categoryName} onChange={(event)=>setCategoryName(event.target.value)} placeholder="Ex.: Controle de acesso"/></label>
+          <footer className="modal-form-actions"><button onClick={()=>setCategoryOpen(false)} type="button">Cancelar</button><button type="submit">Adicionar categoria</button></footer>
+        </form>
+      </FormModal>
     </main>
   );
 }

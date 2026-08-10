@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import FormModal from "@/components/FormModal";
 import { supabase } from "@/lib/supabaseClient";
 
 const emptyUser = {
@@ -57,6 +58,7 @@ export default function AccessManagementDashboard() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
 
   async function loadUsers() {
     setLoading(true);
@@ -145,6 +147,7 @@ export default function AccessManagementDashboard() {
     ]);
     setForm(emptyUser);
     setSaving(false);
+    setCreateOpen(false);
     setMessage("Pessoa cadastrada. Ela ja pode criar o primeiro acesso.");
   }
 
@@ -208,83 +211,13 @@ export default function AccessManagementDashboard() {
       {message && <p className="access-message">{message}</p>}
 
       <section className="access-layout">
-        <article className="access-panel">
-          <header>
-            <div>
-              <span>Cadastro</span>
-              <h2>Nova pessoa</h2>
-            </div>
-            <AccessIcon name="plus" />
-          </header>
-
-          {!canManage && !loading && (
-            <p className="access-warning">
-              Apenas perfis admin podem cadastrar novas pessoas.
-            </p>
-          )}
-
-          <form className="access-form" onSubmit={createUser}>
-            <label>
-              Nome completo
-              <input
-                disabled={!canManage}
-                name="fullName"
-                onChange={updateField}
-                placeholder="Nome da pessoa"
-                required
-                value={form.fullName}
-              />
-            </label>
-            <label>
-              E-mail
-              <input
-                disabled={!canManage}
-                name="email"
-                onChange={updateField}
-                placeholder="nome@empresa.com"
-                required
-                type="email"
-                value={form.email}
-              />
-            </label>
-            <label>
-              Area
-              <input
-                disabled={!canManage}
-                name="area"
-                onChange={updateField}
-                placeholder="Ex.: Engenharia"
-                value={form.area}
-              />
-            </label>
-            <label>
-              Perfil
-              <select
-                disabled={!canManage}
-                name="role"
-                onChange={updateField}
-                value={form.role}
-              >
-                {Object.entries(roleLabels).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button disabled={!canManage || saving} type="submit">
-              {saving ? "Cadastrando..." : "Cadastrar pessoa"}
-            </button>
-          </form>
-        </article>
-
-        <article className="access-panel access-list-panel">
+        <article className="access-panel access-list-panel access-list-full">
           <header>
             <div>
               <span>Base autorizada</span>
               <h2>Usuarios</h2>
             </div>
-            <strong>{users.length}</strong>
+            <div className="access-list-actions"><strong>{users.length}</strong><button disabled={!canManage} onClick={() => setCreateOpen(true)} type="button"><AccessIcon name="plus"/>Adicionar pessoa</button></div>
           </header>
 
           <div className="access-user-list">
@@ -327,6 +260,23 @@ export default function AccessManagementDashboard() {
           </div>
         </article>
       </section>
+
+      <FormModal
+        description="A pessoa poderá criar o primeiro acesso usando exatamente o e-mail informado abaixo."
+        eyebrow="Controle de acesso"
+        onClose={() => setCreateOpen(false)}
+        open={createOpen}
+        title="Adicionar nova pessoa"
+      >
+        {!canManage && !loading && <p className="access-warning">Apenas perfis admin podem cadastrar novas pessoas.</p>}
+        <form className="modal-form" onSubmit={createUser}>
+          <label className="wide">Nome completo<input autoFocus disabled={!canManage} name="fullName" onChange={updateField} placeholder="Nome da pessoa" required value={form.fullName}/></label>
+          <label className="wide">E-mail<input disabled={!canManage} name="email" onChange={updateField} placeholder="nome@empresa.com" required type="email" value={form.email}/></label>
+          <label>Area<input disabled={!canManage} name="area" onChange={updateField} placeholder="Ex.: Engenharia" value={form.area}/></label>
+          <label>Perfil<select disabled={!canManage} name="role" onChange={updateField} value={form.role}>{Object.entries(roleLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+          <footer className="modal-form-actions"><button onClick={() => setCreateOpen(false)} type="button">Cancelar</button><button disabled={!canManage || saving} type="submit">{saving ? "Cadastrando..." : "Cadastrar pessoa"}</button></footer>
+        </form>
+      </FormModal>
     </main>
   );
 }
