@@ -1,6 +1,18 @@
 alter table public.products
 add column if not exists ncm text;
 
+-- Representação visual escolhida no catálogo; a cor continua derivada da categoria.
+alter table public.products
+add column if not exists product_icon text not null default 'box';
+
+alter table public.products
+drop constraint if exists products_product_icon_check;
+
+alter table public.products
+add constraint products_product_icon_check check (
+  product_icon in ('box', 'component', 'device', 'kit', 'software', 'service')
+);
+
 -- Necessário para importação idempotente: o mesmo código atualiza o cadastro existente.
 create unique index if not exists products_code_unique_idx
 on public.products (code);
@@ -183,7 +195,8 @@ create table if not exists public.product_launch_date_history (
 
 create table if not exists public.quotation_packages (
   id bigint primary key generated always as identity,
-  project_id bigint not null references public.product_development_projects(id) on delete cascade,
+  product_id bigint not null references public.products(id) on delete cascade,
+  project_id bigint references public.product_development_projects(id) on delete set null,
   name text not null,
   provisional_code text,
   supplier text,
@@ -208,6 +221,34 @@ create table if not exists public.quotation_package_items (
 
 alter table public.quotation_packages
 add column if not exists include_in_total boolean not null default false;
+
+-- Composições pertencem ao cadastro mestre do produto, não ao fluxo de desenvolvimento.
+alter table public.quotation_packages
+add column if not exists product_id bigint references public.products(id) on delete cascade;
+
+update public.quotation_packages as package
+set product_id = project.product_id
+from public.product_development_projects as project
+where package.project_id = project.id
+  and package.product_id is null;
+
+alter table public.quotation_packages
+alter column project_id drop not null;
+
+alter table public.quotation_packages
+drop constraint if exists quotation_packages_project_id_fkey;
+
+alter table public.quotation_packages
+add constraint quotation_packages_project_id_fkey
+foreign key (project_id)
+references public.product_development_projects(id)
+on delete set null;
+
+alter table public.quotation_packages
+alter column product_id set not null;
+
+create index if not exists quotation_packages_product_id_idx
+on public.quotation_packages (product_id);
 
 alter table public.quotation_package_items
 add column if not exists sap_code text;

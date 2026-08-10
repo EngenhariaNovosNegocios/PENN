@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import FormModal from "@/components/FormModal";
+import IssueResolutionModal from "@/components/IssueResolutionModal";
 import { supabase } from "@/lib/supabaseClient";
 
 const emptyForm = { productCode: "", description: "", priority: "media", dueDate: "", assigneeEmail: "" };
@@ -33,9 +34,12 @@ export default function IssuesDashboard({ onOpenProduct }) {
   const [message, setMessage] = useState("");
   const [loadingError, setLoadingError] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("todos");
+  const [assigneeFilter, setAssigneeFilter] = useState("todos");
   const [boardView, setBoardView] = useState("active");
   const [highlightedIssueId, setHighlightedIssueId] = useState(null);
   const [issueNavigationRequest, setIssueNavigationRequest] = useState(0);
+  const [resolutionIssue, setResolutionIssue] = useState(null);
+  const [resolving, setResolving] = useState(false);
 
   async function loadData() {
     const [productsResult, issuesResult, resolvedResult, profilesResult] = await Promise.all([
@@ -71,6 +75,7 @@ export default function IssuesDashboard({ onOpenProduct }) {
 
       setBoardView("active");
       setPriorityFilter("todos");
+      setAssigneeFilter("todos");
       setHighlightedIssueId(issueId);
       setIssueNavigationRequest((current) => current + 1);
     }
@@ -97,15 +102,17 @@ export default function IssuesDashboard({ onOpenProduct }) {
     highlightedIssueId,
     issueNavigationRequest,
     issues.length,
+    assigneeFilter,
     priorityFilter,
   ]);
 
-  async function resolveIssue(issue) {
-    const note = window.prompt("Descreva como a pendência foi resolvida (mínimo de 10 caracteres):");
-    if (!note?.trim() || note.trim().length < 10) { setMessage("A resolução precisa ter pelo menos 10 caracteres."); return; }
+  async function resolveIssue(note) {
+    const issue = resolutionIssue;
+    if (!issue || !note?.trim() || note.trim().length < 10) return;
+    setResolving(true);
     const resolvedAt = new Date().toISOString();
     const { data, error } = await supabase.from("product_issues").update({ resolution_note: note.trim(), resolved_at: resolvedAt }).eq("id", issue.id).select("id, product_id, product_code, description, priority, due_date, assignee_name, assignee_email, created_at, resolved_at, resolution_note").single();
-    if (error) { setMessage(`Não foi possível resolver: ${error.message}`); return; }
+    if (error) { setMessage(`Não foi possível resolver: ${error.message}`); setResolving(false); return; }
     setIssues((current) => current.filter((item) => item.id !== issue.id));
     setResolvedIssues((current) => [data, ...current]);
     if (!issues.some((item) => item.product_id === issue.product_id && item.id !== issue.id)) {
@@ -113,6 +120,8 @@ export default function IssuesDashboard({ onOpenProduct }) {
       setProducts((current) => current.map((product) => product.id === issue.product_id ? { ...product, status: "ativo" } : product));
     }
     window.dispatchEvent(new CustomEvent("penn:issues-changed"));
+    setResolutionIssue(null);
+    setResolving(false);
     setMessage("Pendência resolvida e movida para o histórico.");
   }
 
@@ -134,7 +143,13 @@ export default function IssuesDashboard({ onOpenProduct }) {
     window.dispatchEvent(new CustomEvent("penn:issues-changed"));
   }
 
-  const filteredIssues = issues.filter((issue) => priorityFilter === "todos" || issue.priority === priorityFilter);
+  const filteredIssues = issues.filter((issue) => {
+    const matchesPriority = priorityFilter === "todos" || issue.priority === priorityFilter;
+    const matchesAssignee = assigneeFilter === "todos"
+      || issue.assignee_email?.trim().toLowerCase() === assigneeFilter;
+
+    return matchesPriority && matchesAssignee;
+  });
   const groups = useMemo(() => products.map((product) => ({ product, issues: filteredIssues.filter((issue) => issue.product_id === product.id) })).filter((group) => group.issues.length > 0), [products, filteredIssues]);
   const overdue = issues.filter((issue) => issue.due_date && new Date(`${issue.due_date}T23:59:59`) < new Date()).length;
   const critical = issues.filter((issue) => issue.priority === "critica").length;
@@ -166,10 +181,17 @@ export default function IssuesDashboard({ onOpenProduct }) {
         </form>
       </FormModal>
 
+      <IssueResolutionModal
+        issue={resolutionIssue}
+        loading={resolving}
+        onClose={() => setResolutionIssue(null)}
+        onSubmit={resolveIssue}
+      />
+
       <section className="issues-board">
         {loadingError && <div className="issues-load-error"><span>{loadingError}</span><button onClick={loadData}>Tentar novamente</button></div>}
         <nav className="issues-section-tabs"><button className={boardView==="active"?"active":""} onClick={()=>setBoardView("active")}>Pendências abertas <b>{issues.length}</b></button><button className={boardView==="history"?"active":""} onClick={()=>setBoardView("history")}>Histórico resolvido <b>{resolvedIssues.length}</b></button></nav>
-        {boardView==="active"&&<><header><div><span className="panel-kicker">Visão por produto</span><h2>Pendências abertas</h2></div><div className="issues-board-actions"><div className="priority-filters"><button className={priorityFilter === "todos" ? "active" : ""} onClick={() => setPriorityFilter("todos")}>Todos</button>{Object.entries(priorityMeta).map(([value, meta]) => <button className={priorityFilter === value ? "active" : ""} key={value} onClick={() => setPriorityFilter(value)}>{meta.label}</button>)}</div></div></header>
+        {boardView==="active"&&<><header><div><span className="panel-kicker">Visão por produto</span><h2>Pendências abertas</h2></div><div className="issues-board-actions"><label className="issues-assignee-filter"><span>Responsável</span><select aria-label="Filtrar pendências por responsável" value={assigneeFilter} onChange={(event) => setAssigneeFilter(event.target.value)}><option value="todos">Todas as pessoas</option>{profiles.filter((profile) => profile.email).map((profile) => <option key={profile.id} value={profile.email.trim().toLowerCase()}>{profile.full_name || profile.email}</option>)}</select></label><div className="priority-filters"><button className={priorityFilter === "todos" ? "active" : ""} onClick={() => setPriorityFilter("todos")}>Todos</button>{Object.entries(priorityMeta).map(([value, meta]) => <button className={priorityFilter === value ? "active" : ""} key={value} onClick={() => setPriorityFilter(value)}>{meta.label}</button>)}</div></div></header>
         <div className="issue-groups">
           {groups.map(({ product, issues: productIssues }) => (
             <article className="issue-product-group" key={product.id}>
@@ -178,7 +200,7 @@ export default function IssuesDashboard({ onOpenProduct }) {
                 <div><strong>{product.code}</strong><h3>{product.name}</h3></div>
                 <span>{productIssues.length} {productIssues.length === 1 ? "pendência" : "pendências"}</span>
               </header>
-              <div>{productIssues.map((issue, index) => { const isOverdue = issue.due_date && new Date(`${issue.due_date}T23:59:59`) < new Date(); const isTargeted = Number(issue.id) === highlightedIssueId; return <div className={`global-issue-row ${isTargeted ? "targeted" : ""}`} id={`product-issue-${issue.id}`} key={issue.id} tabIndex={isTargeted ? -1 : undefined}><span className="issue-order">{String(index + 1).padStart(2,"0")}</span><div><strong>{issue.description}</strong><span><i className={`priority-dot ${priorityMeta[issue.priority]?.className || "medium"}`}/>{priorityMeta[issue.priority]?.label || "Média"}{issue.assignee_name ? ` · ${issue.assignee_name}` : ""}</span></div><span className={isOverdue ? "issue-deadline overdue" : "issue-deadline"}><IssueIcon name="calendar"/>{issue.due_date ? new Date(`${issue.due_date}T12:00:00`).toLocaleDateString("pt-BR") : "Sem prazo"}</span><button className="resolve-issue-button" onClick={() => resolveIssue(issue)}>Resolver</button></div>})}</div>
+              <div>{productIssues.map((issue, index) => { const isOverdue = issue.due_date && new Date(`${issue.due_date}T23:59:59`) < new Date(); const isTargeted = Number(issue.id) === highlightedIssueId; return <div className={`global-issue-row ${isTargeted ? "targeted" : ""}`} id={`product-issue-${issue.id}`} key={issue.id} tabIndex={isTargeted ? -1 : undefined}><span className="issue-order">{String(index + 1).padStart(2,"0")}</span><div><strong>{issue.description}</strong><span><i className={`priority-dot ${priorityMeta[issue.priority]?.className || "medium"}`}/>{priorityMeta[issue.priority]?.label || "Média"}{issue.assignee_name ? ` · ${issue.assignee_name}` : ""}</span></div><span className={isOverdue ? "issue-deadline overdue" : "issue-deadline"}><IssueIcon name="calendar"/>{issue.due_date ? new Date(`${issue.due_date}T12:00:00`).toLocaleDateString("pt-BR") : "Sem prazo"}</span><button className="resolve-issue-button" onClick={() => setResolutionIssue(issue)}>Resolver</button></div>})}</div>
             </article>
           ))}
           {groups.length === 0 && <div className="issues-empty"><IssueIcon name="alert"/><strong>Nenhuma pendência encontrada</strong><span>Não há ocorrências abertas com este filtro.</span></div>}

@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import FormModal from "@/components/FormModal";
+import IssueResolutionModal from "@/components/IssueResolutionModal";
+import ProductCompositions from "@/components/ProductCompositions";
 import { supabase } from "@/lib/supabaseClient";
 import SupplierDashboard from "@/components/SupplierDashboard";
 import SpreadsheetImport from "@/components/SpreadsheetImport";
@@ -38,6 +40,7 @@ const initialProducts = [
     name: "Linha Hidraulica Especial",
     code: "PENN-001",
     category: "Produto tecnico",
+    product_icon: "component",
     ncm: "8412.21.10",
     owner: "Engenharia",
     status: "ativo",
@@ -49,6 +52,7 @@ const initialProducts = [
     name: "Painel de Controle Customizado",
     code: "PENN-002",
     category: "Sistema montado",
+    product_icon: "kit",
     ncm: "8537.10.90",
     owner: "Novos Negocios",
     status: "manutencao",
@@ -61,6 +65,7 @@ const emptyForm = {
   name: "",
   code: "",
   category: "",
+  product_icon: "box",
   ncm: "",
   owner: "",
   status: "ativo",
@@ -74,7 +79,16 @@ const emptyStructureForm = {
 };
 
 const productColumns =
-  "id, name, code, category, ncm, owner, status, characteristics, structure, created_at";
+  "id, name, code, category, product_icon, ncm, owner, status, characteristics, structure, created_at";
+
+const productTypeOptions = [
+  { id: "box", label: "Produto geral", description: "Item acabado ou de classificação ampla" },
+  { id: "component", label: "Componente", description: "Peça ou módulo que compõe outra solução" },
+  { id: "device", label: "Equipamento", description: "Dispositivo eletrônico, mecânico ou funcional" },
+  { id: "kit", label: "Kit ou conjunto", description: "Conjunto comercializado como uma única solução" },
+  { id: "software", label: "Software", description: "Aplicativo, licença ou produto digital" },
+  { id: "service", label: "Serviço", description: "Entrega técnica sem estoque físico próprio" },
+];
 
 const structureColumns =
   "id, product_id, material_code, description, quantity, created_at";
@@ -107,6 +121,7 @@ const tabs = [
   { id: "overview", label: "Resumo", icon: "overview" },
   { id: "edit", label: "Editar", icon: "edit" },
   { id: "structure", label: "Estrutura", icon: "structure" },
+  { id: "compositions", label: "Composições", icon: "budget" },
   { id: "issues", label: "Pendências", icon: "issues" },
   { id: "fiscal", label: "Fiscal", icon: "fiscal" },
   { id: "files", label: "Arquivos", icon: "documents" },
@@ -127,6 +142,26 @@ function ActionIcon({ name }) {
     trash: <><path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6"/></>,
   };
   return <svg className="action-icon" aria-hidden="true" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8">{paths[name]}</svg>;
+}
+
+function ProductTypeIcon({ name = "box" }) {
+  const paths = {
+    box: <><path d="m21 8-9 5-9-5"/><path d="M3 8l9-5 9 5v8l-9 5-9-5Z"/><path d="M12 13v8"/></>,
+    component: <><rect x="5" y="5" width="14" height="14" rx="3"/><path d="M9 1v4M15 1v4M9 19v4M15 19v4M1 9h4M1 15h4M19 9h4M19 15h4"/><circle cx="12" cy="12" r="3"/></>,
+    device: <><rect x="5" y="2" width="14" height="20" rx="3"/><path d="M9 6h6M8 10h8M9 18h.01M12 18h.01M15 18h.01"/></>,
+    kit: <><path d="M4 7h16v13H4Z"/><path d="M8 7V4h8v3M4 12h16M10 10v4h4v-4"/></>,
+    software: <><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 14l2 2-2 2M13 18h3"/></>,
+    service: <><path d="M14.5 6.5a4 4 0 0 0-5.3 5.3L3 18l3 3 6.2-6.2a4 4 0 0 0 5.3-5.3l-3 3-3-3Z"/></>,
+  };
+
+  return <svg aria-hidden="true" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7">{paths[name] || paths.box}</svg>;
+}
+
+function categoryVisual(category) {
+  const value = category || "Sem categoria";
+  const hash = Array.from(value).reduce((total, character) => total + character.charCodeAt(0), 0);
+  const hues = [207, 171, 38, 266, 12, 329, 190, 93];
+  return { "--category-hue": hues[hash % hues.length] };
 }
 
 function normalizeNcm(value) {
@@ -175,7 +210,11 @@ export default function ProductManager() {
   const [isDeletingProduct, setIsDeletingProduct] = useState(false);
   const [isAddingStructure, setIsAddingStructure] = useState(false);
   const [resolvingIssueId, setResolvingIssueId] = useState(null);
-  const [resolutionNotes, setResolutionNotes] = useState({});
+  const [resolutionIssue, setResolutionIssue] = useState(null);
+  const [iconProduct, setIconProduct] = useState(null);
+  const [isSavingIcon, setIsSavingIcon] = useState(false);
+  const [productDeleteOpen, setProductDeleteOpen] = useState(false);
+  const [productDeleteConfirmation, setProductDeleteConfirmation] = useState("");
   const [documentType, setDocumentType] = useState(documentTypes[0]);
   const [documentFile, setDocumentFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -260,6 +299,7 @@ export default function ProductManager() {
       name: selectedProduct.name ?? "",
       code: selectedProduct.code ?? "",
       category: selectedProduct.category ?? "",
+      product_icon: selectedProduct.product_icon ?? "box",
       ncm: selectedProduct.ncm ?? "",
       owner: selectedProduct.owner ?? "",
       status: selectedProduct.status ?? "ativo",
@@ -526,6 +566,34 @@ export default function ProductManager() {
     }
   }
 
+  async function updateProductIcon(icon) {
+    if (!iconProduct) {
+      return;
+    }
+
+    setIsSavingIcon(true);
+    setErrorMessage("");
+    const { data, error } = await supabase
+      .from("products")
+      .update({ product_icon: icon })
+      .eq("id", iconProduct.id)
+      .select(productColumns)
+      .single();
+
+    if (error) {
+      setErrorMessage(`Não foi possível alterar o tipo do produto: ${error.message}`);
+      setIsSavingIcon(false);
+      return;
+    }
+
+    setProducts((current) =>
+      current.map((product) => product.id === data.id ? { ...product, ...data } : product)
+    );
+    setIconProduct(null);
+    setIsSavingIcon(false);
+    showSuccess("Tipo visual do produto atualizado.");
+  }
+
   async function addProduct(event) {
     event.preventDefault();
 
@@ -583,6 +651,7 @@ export default function ProductManager() {
       name: editForm.name.trim(),
       code: editForm.code.trim(),
       category: editForm.category.trim(),
+      product_icon: editForm.product_icon || "box",
       ncm: editForm.ncm.trim(),
       owner: editForm.owner.trim(),
       characteristics: editForm.characteristics.trim(),
@@ -641,14 +710,6 @@ export default function ProductManager() {
       return;
     }
 
-    const confirmed = window.confirm(
-      `Excluir o produto ${selectedProduct.code}? Essa acao tambem remove estrutura e pendências vinculadas.`
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
     setIsDeletingProduct(true);
     setErrorMessage("");
 
@@ -692,7 +753,10 @@ export default function ProductManager() {
     );
     setSelectedId(remainingProducts[0]?.id ?? null);
     setActiveTab("overview");
+    setViewMode("catalog");
     setIsDeletingProduct(false);
+    setProductDeleteOpen(false);
+    setProductDeleteConfirmation("");
     showSuccess("Produto excluido.");
   }
 
@@ -763,9 +827,9 @@ export default function ProductManager() {
     showSuccess("Item removido da estrutura.");
   }
 
-  async function resolveIssue(issue) {
-    const resolutionNote = resolutionNotes[issue.id]?.trim();
-    if (!resolutionNote) {
+  async function resolveIssue(resolutionNote) {
+    const issue = resolutionIssue;
+    if (!issue || !resolutionNote?.trim()) {
       setErrorMessage("Escreva uma justificativa para resolver o problema.");
       return;
     }
@@ -776,7 +840,7 @@ export default function ProductManager() {
     const resolvedAt = new Date().toISOString();
     const { error } = await supabase
       .from("product_issues")
-      .update({ resolution_note: resolutionNote, resolved_at: resolvedAt })
+      .update({ resolution_note: resolutionNote.trim(), resolved_at: resolvedAt })
       .eq("id", issue.id);
 
     if (error) {
@@ -794,20 +858,16 @@ export default function ProductManager() {
       current.filter((currentIssue) => currentIssue.id !== issue.id)
     );
     setResolvedIssues((current) => [
-      { ...issue, resolution_note: resolutionNote, resolved_at: resolvedAt },
+      { ...issue, resolution_note: resolutionNote.trim(), resolved_at: resolvedAt },
       ...current.filter((currentIssue) => currentIssue.id !== issue.id),
     ]);
-    setResolutionNotes((current) => {
-      const next = { ...current };
-      delete next[issue.id];
-      return next;
-    });
 
     if (remainingIssues.length === 0) {
       await saveProductStatus(issue.product_id, "ativo");
     }
 
     setResolvingIssueId(null);
+    setResolutionIssue(null);
     window.dispatchEvent(new CustomEvent("penn:issues-changed"));
     showSuccess("Problema resolvido.");
   }
@@ -1029,7 +1089,7 @@ export default function ProductManager() {
 
           <div className="product-list-items">
             {filteredProducts.map((product) => (
-                <button
+                <div
                   className="code-row"
                   key={product.id}
                   onClick={() => {
@@ -1037,11 +1097,37 @@ export default function ProductManager() {
                     setActiveTab("overview");
                     setViewMode("detail");
                   }}
-                  type="button"
+                  onKeyDown={(event) => {
+                    if (event.target !== event.currentTarget) {
+                      return;
+                    }
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setSelectedId(product.id);
+                      setActiveTab("overview");
+                      setViewMode("detail");
+                    }
+                  }}
+                  role="button"
+                  tabIndex="0"
                 >
+                  <button
+                    aria-label={`Alterar tipo visual de ${product.name}`}
+                    className="product-type-trigger"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setIconProduct(product);
+                    }}
+                    style={categoryVisual(product.category)}
+                    title={`Tipo: ${productTypeOptions.find((option) => option.id === product.product_icon)?.label || "Produto geral"}`}
+                    type="button"
+                  >
+                    <ProductTypeIcon name={product.product_icon} />
+                  </button>
                   <span className="code-identity">
                     <strong>{product.code}</strong>
                     <small>{product.name}</small>
+                    <em>{product.category || "Sem categoria"}</em>
                   </span>
                   <span className="code-row-meta">
                     {issues.filter((issue) => issue.product_id === product.id).length > 0 && (
@@ -1051,7 +1137,7 @@ export default function ProductManager() {
                     )}
                     <span aria-hidden="true">→</span>
                   </span>
-                </button>
+                </div>
               ))}
 
             {!isLoading && filteredProducts.length === 0 && (
@@ -1062,7 +1148,15 @@ export default function ProductManager() {
         )}
 
         {viewMode === "detail" && (
-        <section className="panel product-detail" aria-label="Detalhes do produto">
+        <FormModal
+          description={selectedProduct ? `${selectedProduct.code} · ${selectedProduct.category || "Sem categoria"}` : "Consulte os dados do produto."}
+          eyebrow="Ficha completa do produto"
+          onClose={() => setViewMode("catalog")}
+          open={viewMode === "detail"}
+          size="xlarge"
+          title={selectedProduct?.name || "Produto"}
+        >
+        <section className="product-detail product-detail-overlay" aria-label="Detalhes do produto">
           {!selectedProduct && (
             <p className="empty-state">Cadastre ou selecione um produto.</p>
           )}
@@ -1070,9 +1164,21 @@ export default function ProductManager() {
           {selectedProduct && (
             <>
               <div className="detail-top">
-                <div>
-                  <span className="muted-label">{selectedProduct.code}</span>
-                  <h2>{selectedProduct.name}</h2>
+                <div className="product-detail-identity">
+                  <button
+                    aria-label="Alterar tipo visual do produto"
+                    className="product-type-trigger large"
+                    onClick={() => setIconProduct(selectedProduct)}
+                    style={categoryVisual(selectedProduct.category)}
+                    type="button"
+                  >
+                    <ProductTypeIcon name={selectedProduct.product_icon} />
+                  </button>
+                  <div>
+                    <span className="muted-label">{selectedProduct.code}</span>
+                    <h2>{selectedProduct.name}</h2>
+                    <small>{selectedProduct.category || "Sem categoria"}</small>
+                  </div>
                 </div>
                 <div className="detail-actions">
                   <span className={`status-badge ${selectedProduct.status}`}>
@@ -1082,7 +1188,10 @@ export default function ProductManager() {
                   <button
                     className="delete-product-button"
                     disabled={isDeletingProduct}
-                    onClick={deleteSelectedProduct}
+                    onClick={() => {
+                      setProductDeleteConfirmation("");
+                      setProductDeleteOpen(true);
+                    }}
                     type="button"
                   >
                     {isDeletingProduct ? "Excluindo..." : "Excluir"}
@@ -1268,10 +1377,7 @@ export default function ProductManager() {
               {activeTab === "issues" && (
                 <section className="tab-panel" aria-label="Pendências do produto">
                   <div className="data-list">
-                    {selectedIssues.map((issue) => {
-                      const resolutionNote = resolutionNotes[issue.id] ?? "";
-                      const canResolve = resolutionNote.trim().length >= 10;
-                      return (
+                    {selectedIssues.map((issue) => (
                       <article className="issue-card" key={issue.id}>
                         <header>
                           <span className="issue-alert"><ActionIcon name="issues" /></span>
@@ -1280,24 +1386,12 @@ export default function ProductManager() {
                           <small>{issue.description}</small>
                           </span>
                         </header>
-                        <div className="resolution-box">
-                          <label htmlFor={`resolution-${issue.id}`}>Justificativa da resolução</label>
-                          <textarea
-                            id={`resolution-${issue.id}`}
-                            onChange={(event) => setResolutionNotes((current) => ({ ...current, [issue.id]: event.target.value }))}
-                            placeholder="Descreva o que foi feito para resolver este problema..."
-                            rows="3"
-                            value={resolutionNote}
-                          />
-                          <div>
-                            <small>{canResolve ? "Justificativa pronta para registro" : "Informe pelo menos 10 caracteres"}</small>
-                            <button disabled={!canResolve || resolvingIssueId === issue.id} onClick={() => resolveIssue(issue)} type="button">
-                              {resolvingIssueId === issue.id ? "Resolvendo..." : "Marcar como resolvido"}
-                            </button>
-                          </div>
+                        <div className="issue-card-actions">
+                          <span><strong>{issuePriorityLabels[issue.priority] || "Média"}</strong><small>{issue.due_date ? `Prazo ${new Date(`${issue.due_date}T12:00:00`).toLocaleDateString("pt-BR")}` : "Sem prazo definido"}</small></span>
+                          <button onClick={() => setResolutionIssue(issue)} type="button">Resolver pendência</button>
                         </div>
                       </article>
-                    )})}
+                    ))}
 
                     {selectedIssues.length === 0 && (
                       <p className="empty-state">
@@ -1340,6 +1434,12 @@ export default function ProductManager() {
                       )}
                     </div>
                   </section>
+                </section>
+              )}
+
+              {activeTab === "compositions" && (
+                <section className="tab-panel composition-tab-panel" aria-label="Composições do produto">
+                  <ProductCompositions product={selectedProduct} />
                 </section>
               )}
 
@@ -1472,6 +1572,7 @@ export default function ProductManager() {
             </>
           )}
         </section>
+        </FormModal>
         )}
       </section>
         </>
@@ -1532,6 +1633,13 @@ export default function ProductManager() {
           </label>
 
           <label>
+            Tipo visual
+            <select name="product_icon" onChange={updateField} value={form.product_icon}>
+              {productTypeOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+            </select>
+          </label>
+
+          <label>
             NCM
             <input
               inputMode="numeric"
@@ -1587,6 +1695,52 @@ export default function ProductManager() {
         <form className="modal-form" onSubmit={createCategory}>
           <label className="wide">Nome da categoria<input autoFocus required value={categoryName} onChange={(event)=>setCategoryName(event.target.value)} placeholder="Ex.: Controle de acesso"/></label>
           <footer className="modal-form-actions"><button onClick={()=>setCategoryOpen(false)} type="button">Cancelar</button><button type="submit">Adicionar categoria</button></footer>
+        </form>
+      </FormModal>
+
+      <FormModal
+        description={iconProduct ? `Escolha a representação de ${iconProduct.code}. A cor é definida automaticamente pela categoria ${iconProduct.category || "Sem categoria"}.` : "Escolha uma representação para o produto."}
+        eyebrow="Identidade visual"
+        onClose={() => setIconProduct(null)}
+        open={Boolean(iconProduct)}
+        title="Tipo do produto"
+      >
+        <section className="product-icon-picker">
+          {productTypeOptions.map((option) => (
+            <button
+              className={iconProduct?.product_icon === option.id ? "selected" : ""}
+              disabled={isSavingIcon}
+              key={option.id}
+              onClick={() => updateProductIcon(option.id)}
+              style={categoryVisual(iconProduct?.category)}
+              type="button"
+            >
+              <span><ProductTypeIcon name={option.id} /></span>
+              <strong>{option.label}</strong>
+              <small>{option.description}</small>
+            </button>
+          ))}
+        </section>
+      </FormModal>
+
+      <IssueResolutionModal
+        issue={resolutionIssue}
+        loading={Boolean(resolvingIssueId)}
+        onClose={() => setResolutionIssue(null)}
+        onSubmit={resolveIssue}
+      />
+
+      <FormModal
+        description="A estrutura, os arquivos e o histórico vinculado também serão removidos. Esta ação não pode ser desfeita."
+        eyebrow="Zona de segurança"
+        onClose={() => setProductDeleteOpen(false)}
+        open={productDeleteOpen}
+        title="Excluir produto"
+      >
+        <form className="supplier-delete-confirm" onSubmit={(event) => { event.preventDefault(); deleteSelectedProduct(); }}>
+          <p>Para confirmar, digite exatamente <strong>{selectedProduct?.code}</strong>.</p>
+          <input autoFocus value={productDeleteConfirmation} onChange={(event) => setProductDeleteConfirmation(event.target.value)} placeholder="Código completo do produto"/>
+          <footer className="modal-form-actions"><button onClick={() => setProductDeleteOpen(false)} type="button">Cancelar</button><button className="danger" disabled={productDeleteConfirmation.trim() !== selectedProduct?.code} type="submit">Excluir definitivamente</button></footer>
         </form>
       </FormModal>
     </main>

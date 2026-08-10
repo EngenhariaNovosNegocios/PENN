@@ -181,10 +181,10 @@ const navigation = [
   { id: "overview", label: "Visão geral", icon: "grid" },
   { id: "products", label: "Produtos", icon: "box" },
   { id: "new-products", label: "Novos produtos", icon: "spark" },
-  { id: "intelligence", label: "Inteligência NPI", icon: "brain", disabled: true },
   { id: "issues", label: "Pendências", icon: "alert" },
   { id: "manager", label: "Gerência", icon: "manager", minimumRole: "gerente" },
   { id: "access", label: "Acessos", icon: "users", minimumRole: "admin" },
+  { id: "intelligence", label: "Inteligência NPI", icon: "brain", disabled: true },
   { id: "indicators", label: "Indicadores", icon: "chart", disabled: true },
   { id: "reports", label: "Relatórios", icon: "file", disabled: true },
 ];
@@ -460,7 +460,7 @@ export default function AppShell({ children }) {
           <span className="nav-section-label">Workspace</span>
           {visibleNavigation.map((item) => (
             <button
-              className={`nav-item ${activePage === item.id ? "active" : ""}`}
+              className={`nav-item ${item.id === "intelligence" ? "inactive-section-start" : ""} ${activePage === item.id ? "active" : ""}`}
               aria-current={activePage === item.id ? "page" : undefined}
               disabled={item.disabled}
               key={item.label}
@@ -582,7 +582,7 @@ export default function AppShell({ children }) {
             {children}
           </section>
           <section className="app-page" hidden={activePage !== "new-products"}>
-            <NewProductsDashboard onOpenProducts={() => openPage("products")} />
+            <NewProductsDashboard />
           </section>
           <section className="app-page" hidden={activePage !== "intelligence"}>
             <StrategicIntelligenceDashboard onOpenProduct={openProduct} />
