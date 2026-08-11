@@ -115,10 +115,6 @@ export default function IssuesDashboard({ onOpenProduct }) {
     if (error) { setMessage(`Não foi possível resolver: ${error.message}`); setResolving(false); return; }
     setIssues((current) => current.filter((item) => item.id !== issue.id));
     setResolvedIssues((current) => [data, ...current]);
-    if (!issues.some((item) => item.product_id === issue.product_id && item.id !== issue.id)) {
-      await supabase.from("products").update({ status: "ativo" }).eq("id", issue.product_id);
-      setProducts((current) => current.map((product) => product.id === issue.product_id ? { ...product, status: "ativo" } : product));
-    }
     window.dispatchEvent(new CustomEvent("penn:issues-changed"));
     setResolutionIssue(null);
     setResolving(false);
@@ -136,9 +132,7 @@ export default function IssuesDashboard({ onOpenProduct }) {
     if (!assignee) { setMessage("Selecione um responsável válido."); setSubmitting(false); return; }
     const { data, error } = await supabase.from("product_issues").insert({ product_id: product.id, product_code: product.code, description: form.description.trim(), priority: form.priority, due_date: form.dueDate, assignee_name: assignee.full_name, assignee_email: assignee.email.trim().toLowerCase() }).select("*").single();
     if (error) { setMessage(`Não foi possível registrar: ${error.message}`); setSubmitting(false); return; }
-    await supabase.from("products").update({ status: "manutencao" }).eq("id", product.id);
     setIssues((current) => [data, ...current]);
-    setProducts((current) => current.map((item) => item.id === product.id ? { ...item, status: "manutencao" } : item));
     setForm(emptyForm); setSubmitting(false); setRegisterOpen(false); setMessage("Problema registrado com sucesso.");
     window.dispatchEvent(new CustomEvent("penn:issues-changed"));
   }

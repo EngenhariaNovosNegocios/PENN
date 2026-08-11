@@ -13,6 +13,10 @@ const statusOptions = {
     label: "Ativo",
     description: "Produto em uso ou comercializacao",
   },
+  inativo: {
+    label: "Inativo",
+    description: "Produto fora de uso, sem perder seu histórico",
+  },
   manutencao: {
     label: "Manutencao",
     description: "Produto com problema aberto para acompanhamento",
@@ -208,6 +212,7 @@ export default function ProductManager() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [isUpdatingProductStatus, setIsUpdatingProductStatus] = useState(false);
   const [isDeletingProduct, setIsDeletingProduct] = useState(false);
   const [isAddingStructure, setIsAddingStructure] = useState(false);
   const [resolvingIssueId, setResolvingIssueId] = useState(null);
@@ -258,20 +263,14 @@ export default function ProductManager() {
       }
 
       const loadedProducts = data ?? [];
-      const [details] = await Promise.all([
+      await Promise.all([
         loadProductDetails(loadedProducts.map((product) => product.id)),
         loadNcmTaxes(),
         loadRawMaterials(),
         loadProductCategories(),
       ]);
-      const productsWithIssueStatus = loadedProducts.map((product) =>
-        details.issues.some((issue) => issue.product_id === product.id)
-          ? { ...product, status: "manutencao" }
-          : product
-      );
-
-      setProducts(productsWithIssueStatus);
-      setSelectedId(productsWithIssueStatus[0]?.id ?? null);
+      setProducts(loadedProducts);
+      setSelectedId(loadedProducts[0]?.id ?? null);
       setIsLoading(false);
     }
 
@@ -467,6 +466,14 @@ export default function ProductManager() {
     [issues, selectedProduct]
   );
 
+  const openIssueCountByProduct = useMemo(
+    () => issues.reduce((counts, issue) => {
+      counts.set(issue.product_id, (counts.get(issue.product_id) ?? 0) + 1);
+      return counts;
+    }, new Map()),
+    [issues]
+  );
+
   const selectedResolvedIssues = useMemo(
     () =>
       resolvedIssues.filter(
@@ -549,25 +556,34 @@ export default function ProductManager() {
   const updateEditField = updateFormField(setEditForm);
   const updateStructureField = updateFormField(setStructureForm);
 
-  function updateProductStatus(productId, status) {
-    setProducts((current) =>
-      current.map((product) =>
-        product.id === productId ? { ...product, status } : product
-      )
-    );
-  }
+  async function setProductActivity(product, status) {
+    if (!product || isUpdatingProductStatus) {
+      return;
+    }
 
-  async function saveProductStatus(productId, status) {
-    updateProductStatus(productId, status);
-
-    const { error } = await supabase
+    setIsUpdatingProductStatus(true);
+    setErrorMessage("");
+    const { data, error } = await supabase
       .from("products")
       .update({ status })
-      .eq("id", productId);
+      .eq("id", product.id)
+      .select(productColumns)
+      .single();
 
     if (error) {
       setErrorMessage(`Nao foi possivel atualizar o status: ${error.message}`);
+      setIsUpdatingProductStatus(false);
+      return;
     }
+
+    setProducts((current) =>
+      current.map((currentProduct) =>
+        currentProduct.id === data.id ? data : currentProduct
+      )
+    );
+    setEditForm((current) => ({ ...current, status: data.status }));
+    setIsUpdatingProductStatus(false);
+    showSuccess(status === "inativo" ? "Produto marcado como inativo." : "Produto reativado.");
   }
 
   async function updateProductIcon(icon) {
@@ -658,6 +674,7 @@ export default function ProductManager() {
       product_icon: editForm.product_icon || "box",
       ncm: editForm.ncm.trim(),
       owner: editForm.owner.trim(),
+      status: editForm.status,
       characteristics: editForm.characteristics.trim(),
     };
 
@@ -682,24 +699,21 @@ export default function ProductManager() {
       return;
     }
 
-    const finalProduct =
-      selectedIssues.length > 0 ? { ...data, status: "manutencao" } : data;
-
     setProducts((current) =>
       current.map((product) =>
-        product.id === selectedProduct.id ? finalProduct : product
+        product.id === selectedProduct.id ? data : product
       )
     );
 
-    if (selectedProduct.code !== finalProduct.code) {
+    if (selectedProduct.code !== data.code) {
       await supabase
         .from("product_issues")
-        .update({ product_code: finalProduct.code })
-        .eq("product_id", finalProduct.id);
+        .update({ product_code: data.code })
+        .eq("product_id", data.id);
       setIssues((current) =>
         current.map((issue) =>
-          issue.product_id === finalProduct.id
-            ? { ...issue, product_code: finalProduct.code }
+          issue.product_id === data.id
+            ? { ...issue, product_code: data.code }
             : issue
         )
       );
@@ -853,11 +867,6 @@ export default function ProductManager() {
       return;
     }
 
-    const remainingIssues = issues.filter(
-      (currentIssue) =>
-        currentIssue.product_id === issue.product_id && currentIssue.id !== issue.id
-    );
-
     setIssues((current) =>
       current.filter((currentIssue) => currentIssue.id !== issue.id)
     );
@@ -865,10 +874,6 @@ export default function ProductManager() {
       { ...issue, resolution_note: resolutionNote.trim(), resolved_at: resolvedAt },
       ...current.filter((currentIssue) => currentIssue.id !== issue.id),
     ]);
-
-    if (remainingIssues.length === 0) {
-      await saveProductStatus(issue.product_id, "ativo");
-    }
 
     setResolvingIssueId(null);
     setResolutionIssue(null);
@@ -1153,9 +1158,19 @@ export default function ProductManager() {
           </div>
 
           <div className="product-list-items">
-            {filteredProducts.map((product) => (
+            {filteredProducts.map((product) => {
+              const openIssueCount = openIssueCountByProduct.get(product.id) ?? 0;
+              const visualState = openIssueCount > 0
+                ? "issue"
+                : product.status === "inativo"
+                  ? "inactive"
+                  : product.status === "ativo"
+                    ? "active"
+                    : "neutral";
+
+              return (
                 <div
-                  className="code-row"
+                  className={`code-row product-card-state-${visualState}`}
                   key={product.id}
                   onClick={() => {
                     setSelectedId(product.id);
@@ -1178,7 +1193,7 @@ export default function ProductManager() {
                 >
                   <button
                     aria-label={`Alterar tipo visual de ${product.name}`}
-                    className="product-type-trigger"
+                    className={`product-type-trigger ${product.status === "inativo" ? "inactive" : ""}`}
                     onClick={(event) => {
                       event.stopPropagation();
                       setIconProduct(product);
@@ -1195,15 +1210,16 @@ export default function ProductManager() {
                     <em>{product.category || "Sem categoria"}</em>
                   </span>
                   <span className="code-row-meta">
-                    {issues.filter((issue) => issue.product_id === product.id).length > 0 && (
+                    {openIssueCount > 0 && (
                       <span className="issue-count" title="Pendências abertas">
-                        {issues.filter((issue) => issue.product_id === product.id).length}
+                        {openIssueCount}
                       </span>
                     )}
                     <span aria-hidden="true">→</span>
                   </span>
                 </div>
-              ))}
+              );
+            })}
 
             {!isLoading && filteredProducts.length === 0 && (
               <p className="empty-state">Nenhum produto encontrado.</p>
@@ -1232,7 +1248,7 @@ export default function ProductManager() {
                 <div className="product-detail-identity">
                   <button
                     aria-label="Alterar tipo visual do produto"
-                    className="product-type-trigger large"
+                    className={`product-type-trigger large ${selectedProduct.status === "inativo" ? "inactive" : ""}`}
                     onClick={() => setIconProduct(selectedProduct)}
                     style={categoryVisual(selectedProduct.category)}
                     type="button"
@@ -1250,6 +1266,21 @@ export default function ProductManager() {
                     {statusOptions[selectedProduct.status]?.label ??
                       selectedProduct.status}
                   </span>
+                  <button
+                    className={`product-activity-button ${selectedProduct.status === "inativo" ? "reactivate" : "deactivate"}`}
+                    disabled={isUpdatingProductStatus}
+                    onClick={() => setProductActivity(
+                      selectedProduct,
+                      selectedProduct.status === "inativo" ? "ativo" : "inativo"
+                    )}
+                    type="button"
+                  >
+                    {isUpdatingProductStatus
+                      ? "Atualizando..."
+                      : selectedProduct.status === "inativo"
+                        ? "Reativar produto"
+                        : "Deixar inativo"}
+                  </button>
                   <button
                     className="delete-product-button"
                     disabled={isDeletingProduct}
@@ -1379,6 +1410,19 @@ export default function ProductManager() {
                         onChange={updateEditField}
                         value={editForm.owner}
                       />
+                    </label>
+
+                    <label>
+                      Status
+                      <select
+                        name="status"
+                        onChange={updateEditField}
+                        value={editForm.status}
+                      >
+                        {Object.entries(statusOptions).map(([value, option]) => (
+                          <option key={value} value={value}>{option.label}</option>
+                        ))}
+                      </select>
                     </label>
 
                     <label className="wide-field">

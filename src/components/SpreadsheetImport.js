@@ -23,7 +23,7 @@ const ALIASES = {
 
 const normalize = value => String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
 const cleanCode = value => String(value ?? "").trim().toUpperCase();
-const productStatus = value => ({ ativo:"ativo", manutencao:"manutencao", em_manutencao:"manutencao", avaliacao:"avaliacao", em_avaliacao:"avaliacao", pausado:"pausado" }[normalize(value)] || "ativo");
+const productStatus = value => ({ ativo:"ativo", inativo:"inativo", manutencao:"manutencao", em_manutencao:"manutencao", avaliacao:"avaliacao", em_avaliacao:"avaliacao", pausado:"pausado" }[normalize(value)] || "ativo");
 const batches = (items, size=200) => Array.from({length:Math.ceil(items.length/size)},(_,index)=>items.slice(index*size,(index+1)*size));
 
 function parseCsv(text) {
