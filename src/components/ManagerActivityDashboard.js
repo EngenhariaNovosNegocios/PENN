@@ -43,12 +43,6 @@ function ManagerIcon({ name, className = "" }) {
       </>
     ),
     check: <path d="m5 12 4 4L19 6" />,
-    box: (
-      <>
-        <path d="m21 8-9 5-9-5" />
-        <path d="M3 8l9-5 9 5v8l-9 5-9-5Z" />
-      </>
-    ),
     arrow: <path d="m9 18 6-6-6-6" />,
   };
 
@@ -83,7 +77,6 @@ function isOverdue(value) {
 export default function ManagerActivityDashboard({
   onOpenDevelopmentTask,
   onOpenIssues,
-  onOpenProducts,
 }) {
   const [data, setData] = useState({
     products: [],
@@ -289,164 +282,130 @@ export default function ManagerActivityDashboard({
       </section>
 
       <section className={styles.grid}>
-        <article className={styles.panel}>
-          <header>
-            <div>
-              <span>Prioridade</span>
-              <h2>Pendências que precisam de atenção</h2>
-            </div>
-            <button onClick={onOpenIssues} type="button">
-              Abrir pendências <ManagerIcon className={styles.buttonIcon} name="arrow" />
-            </button>
-          </header>
-
-          <div className={styles.list}>
-            {urgentIssues.slice(0, 8).map((issue) => (
-              <button
-                className={isOverdue(issue.due_date) ? styles.overdue : ""}
-                key={issue.id}
-                onClick={onOpenIssues}
-                type="button"
-              >
-                <span className={`${styles.priority} ${styles[issue.priority || "media"]}`}>
-                  {priorityLabels[issue.priority] ?? "Média"}
-                </span>
-                <div>
-                  <strong>{issue.product_code}</strong>
-                  <small>{issue.description}</small>
-                </div>
-                <time>{formatDate(issue.due_date)}</time>
-              </button>
-            ))}
-
-            {!loading && urgentIssues.length === 0 && (
-              <p className={styles.empty}>Nenhuma pendência aberta.</p>
-            )}
-            {loading && urgentIssues.length === 0 && (
-              <p className={styles.empty}>Carregando pendências...</p>
-            )}
-          </div>
-        </article>
-
-        <article className={styles.panel}>
-          <header>
-            <div>
-              <span>Execução</span>
-              <h2>Tarefas da etapa atual</h2>
-            </div>
-          </header>
-
-          <div className={styles.list}>
-            {upcomingTasks.map((task) => (
-              <button
-                className={isOverdue(task.due_date) ? styles.overdue : ""}
-                key={task.id}
-                onClick={() =>
-                  onOpenDevelopmentTask?.({
-                    projectId: task.project_id,
-                    stageKey: task.stage_key,
-                    taskId: task.id,
-                  })
-                }
-                type="button"
-              >
-                <span className={`${styles.status} ${styles[task.status]}`}>
-                  {taskStatusLabels[task.status] ?? task.status}
-                </span>
-                <div>
-                  <strong>{task.title}</strong>
-                  <small>
-                    {task.product_development_projects?.products?.code ??
-                      "Produto"}{" "}
-                    - {task.assignee_name || task.owner_area || "Sem responsável"}
-                  </small>
-                </div>
-                <time>{formatDate(task.due_date)}</time>
-              </button>
-            ))}
-
-            {!loading && upcomingTasks.length === 0 && (
-              <p className={styles.empty}>Nenhuma tarefa aberta.</p>
-            )}
-            {loading && upcomingTasks.length === 0 && (
-              <p className={styles.empty}>Carregando tarefas...</p>
-            )}
-          </div>
-        </article>
-
-        <article className={styles.panel}>
-          <header>
-            <div>
-              <span>Portfólio</span>
-              <h2>Projetos ativos</h2>
-            </div>
-            <button onClick={() => onOpenProducts?.()} type="button">
-              Ver produtos <ManagerIcon className={styles.buttonIcon} name="arrow" />
-            </button>
-          </header>
-
-          <div className={styles.projects}>
-            {data.projects.slice(0, 6).map((project) => (
-              <button
-                key={project.id}
-                onClick={() => onOpenProducts?.(project.product_id)}
-                type="button"
-              >
-                <span className={styles.projectIcon}>
-                  <ManagerIcon className={styles.icon} name="box" />
-                </span>
-                <div>
-                  <strong>{project.products?.code ?? "Produto"}</strong>
-                  <small>{project.products?.name ?? "Sem nome"}</small>
-                </div>
-                <time>{formatDate(project.target_launch_date)}</time>
-              </button>
-            ))}
-
-            {!loading && data.projects.length === 0 && (
-              <p className={styles.empty}>Nenhum projeto ativo.</p>
-            )}
-            {loading && data.projects.length === 0 && (
-              <p className={styles.empty}>Carregando projetos...</p>
-            )}
-          </div>
-        </article>
-
-        <article className={styles.panel}>
-          <header>
-            <div>
-              <span>Histórico</span>
-              <h2>Resolvidas recentemente</h2>
-            </div>
-          </header>
-
-          <div className={styles.resolved}>
-            {data.resolvedIssues.map((issue) => (
-              <div key={issue.id}>
-                <span className={styles.resolvedIcon}>
-                  <ManagerIcon className={styles.icon} name="check" />
-                </span>
-                <div>
-                  <strong>{issue.product_code}</strong>
-                  <small>{issue.description}</small>
-                  {issue.resolution_note && <p>{issue.resolution_note}</p>}
-                </div>
-                <time>
-                  {issue.resolved_at
-                    ? new Date(issue.resolved_at).toLocaleDateString("pt-BR")
-                    : "-"}
-                </time>
+        <div className={styles.column}>
+          <article className={styles.panel}>
+            <header>
+              <div>
+                <span>Prioridade</span>
+                <h2>Pendências que precisam de atenção</h2>
               </div>
-            ))}
+              <button onClick={onOpenIssues} type="button">
+                Abrir pendências <ManagerIcon className={styles.buttonIcon} name="arrow" />
+              </button>
+            </header>
 
-            {!loading && data.resolvedIssues.length === 0 && (
-              <p className={styles.empty}>Nenhuma resolução recente.</p>
-            )}
-            {loading && data.resolvedIssues.length === 0 && (
-              <p className={styles.empty}>Carregando histórico...</p>
-            )}
-          </div>
-        </article>
+            <div className={styles.list}>
+              {urgentIssues.slice(0, 8).map((issue) => (
+                <button
+                  className={isOverdue(issue.due_date) ? styles.overdue : ""}
+                  key={issue.id}
+                  onClick={onOpenIssues}
+                  type="button"
+                >
+                  <span className={`${styles.priority} ${styles[issue.priority || "media"]}`}>
+                    {priorityLabels[issue.priority] ?? "Média"}
+                  </span>
+                  <div>
+                    <strong>{issue.product_code}</strong>
+                    <small>{issue.description}</small>
+                  </div>
+                  <time>{formatDate(issue.due_date)}</time>
+                </button>
+              ))}
+
+              {!loading && urgentIssues.length === 0 && (
+                <p className={styles.empty}>Nenhuma pendência aberta.</p>
+              )}
+              {loading && urgentIssues.length === 0 && (
+                <p className={styles.empty}>Carregando pendências...</p>
+              )}
+            </div>
+          </article>
+
+          <article className={styles.panel}>
+            <header>
+              <div>
+                <span>Histórico</span>
+                <h2>Resolvidas recentemente</h2>
+              </div>
+            </header>
+
+            <div className={styles.resolved}>
+              {data.resolvedIssues.map((issue) => (
+                <div key={issue.id}>
+                  <span className={styles.resolvedIcon}>
+                    <ManagerIcon className={styles.icon} name="check" />
+                  </span>
+                  <div>
+                    <strong>{issue.product_code}</strong>
+                    <small>{issue.description}</small>
+                    {issue.resolution_note && <p>{issue.resolution_note}</p>}
+                  </div>
+                  <time>
+                    {issue.resolved_at
+                      ? new Date(issue.resolved_at).toLocaleDateString("pt-BR")
+                      : "-"}
+                  </time>
+                </div>
+              ))}
+
+              {!loading && data.resolvedIssues.length === 0 && (
+                <p className={styles.empty}>Nenhuma resolução recente.</p>
+              )}
+              {loading && data.resolvedIssues.length === 0 && (
+                <p className={styles.empty}>Carregando histórico...</p>
+              )}
+            </div>
+          </article>
+        </div>
+
+        <div className={styles.column}>
+          <article className={styles.panel}>
+            <header>
+              <div>
+                <span>Novos produtos</span>
+                <h2>Tarefas da etapa atual</h2>
+              </div>
+            </header>
+
+            <div className={styles.list}>
+              {upcomingTasks.map((task) => (
+                <button
+                  className={isOverdue(task.due_date) ? styles.overdue : ""}
+                  key={task.id}
+                  onClick={() =>
+                    onOpenDevelopmentTask?.({
+                      projectId: task.project_id,
+                      stageKey: task.stage_key,
+                      taskId: task.id,
+                    })
+                  }
+                  type="button"
+                >
+                  <span className={`${styles.status} ${styles[task.status]}`}>
+                    {taskStatusLabels[task.status] ?? task.status}
+                  </span>
+                  <div>
+                    <strong>{task.title}</strong>
+                    <small>
+                      {task.product_development_projects?.products?.code ??
+                        "Produto"}{" "}
+                      - {task.assignee_name || task.owner_area || "Sem responsável"}
+                    </small>
+                  </div>
+                  <time>{formatDate(task.due_date)}</time>
+                </button>
+              ))}
+
+              {!loading && upcomingTasks.length === 0 && (
+                <p className={styles.empty}>Nenhuma tarefa aberta.</p>
+              )}
+              {loading && upcomingTasks.length === 0 && (
+                <p className={styles.empty}>Carregando tarefas...</p>
+              )}
+            </div>
+          </article>
+        </div>
       </section>
     </main>
   );

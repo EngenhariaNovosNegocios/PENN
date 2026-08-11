@@ -104,6 +104,7 @@ const budgetColumns =
 
 const emptyBudgetItem = { itemCode: "", itemName: "", amount: "", currency: "BRL", overheadRate: "0", quantity: "1", unitType: "UN", mkp: "1" };
 const emptyRawMaterial = { code: "", name: "", unitType: "UN" };
+const rawMaterialColumns = "id, code, name, unit_type, is_provisional, created_at";
 
 const documentTypes = [
   "Inspeção de recebimento",
@@ -221,6 +222,9 @@ export default function ProductManager() {
   const [budgetItem, setBudgetItem] = useState(emptyBudgetItem);
   const [isSavingBudget, setIsSavingBudget] = useState(false);
   const [rawMaterialForm, setRawMaterialForm] = useState(emptyRawMaterial);
+  const [rawMaterialEditForm, setRawMaterialEditForm] = useState(emptyRawMaterial);
+  const [editingRawMaterial, setEditingRawMaterial] = useState(null);
+  const [isSavingRawMaterial, setIsSavingRawMaterial] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [createStep, setCreateStep] = useState("essential");
@@ -420,7 +424,7 @@ export default function ProductManager() {
   }
 
   async function loadRawMaterials() {
-    const { data } = await supabase.from("raw_materials").select("id, code, name, unit_type, is_provisional, created_at").order("code");
+    const { data } = await supabase.from("raw_materials").select(rawMaterialColumns).order("code");
     setRawMaterials(data ?? []);
   }
 
@@ -899,9 +903,70 @@ export default function ProductManager() {
 
   async function addRawMaterial(event) {
     event.preventDefault();
-    const { data, error } = await supabase.from("raw_materials").insert({ code: rawMaterialForm.code.trim().toUpperCase(), name: rawMaterialForm.name.trim(), unit_type: rawMaterialForm.unitType, is_provisional: false }).select("id, code, name, unit_type, is_provisional, created_at").single();
-    if (error) { setErrorMessage(`Nao foi possivel cadastrar a matéria-prima: ${error.message}`); return; }
-    setRawMaterials((current) => [...current, data].sort((a,b) => a.code.localeCompare(b.code))); setRawMaterialForm(emptyRawMaterial); setRawMaterialOpen(false); showSuccess("Matéria-prima cadastrada.");
+    setIsSavingRawMaterial(true);
+    setErrorMessage("");
+    const { data, error } = await supabase
+      .from("raw_materials")
+      .insert({
+        code: rawMaterialForm.code.trim().toUpperCase(),
+        name: rawMaterialForm.name.trim(),
+        unit_type: rawMaterialForm.unitType,
+        is_provisional: false,
+      })
+      .select(rawMaterialColumns)
+      .single();
+
+    setIsSavingRawMaterial(false);
+    if (error) {
+      setErrorMessage(`Nao foi possivel cadastrar a matéria-prima: ${error.message}`);
+      return;
+    }
+
+    setRawMaterials((current) => [...current, data].sort((a, b) => a.code.localeCompare(b.code)));
+    setRawMaterialForm(emptyRawMaterial);
+    setRawMaterialOpen(false);
+    showSuccess("Matéria-prima cadastrada.");
+  }
+
+  function openRawMaterialEditor(material) {
+    setEditingRawMaterial(material);
+    setRawMaterialEditForm({
+      code: material.code || "",
+      name: material.name || "",
+      unitType: material.unit_type || "UN",
+    });
+    setErrorMessage("");
+  }
+
+  async function updateRawMaterial(event) {
+    event.preventDefault();
+    if (!editingRawMaterial) return;
+
+    setIsSavingRawMaterial(true);
+    setErrorMessage("");
+    const { data, error } = await supabase
+      .from("raw_materials")
+      .update({
+        code: rawMaterialEditForm.code.trim().toUpperCase(),
+        name: rawMaterialEditForm.name.trim(),
+        unit_type: rawMaterialEditForm.unitType,
+      })
+      .eq("id", editingRawMaterial.id)
+      .select(rawMaterialColumns)
+      .single();
+
+    setIsSavingRawMaterial(false);
+    if (error) {
+      setErrorMessage(`Nao foi possivel atualizar a matéria-prima: ${error.message}`);
+      return;
+    }
+
+    setRawMaterials((current) => current
+      .map((item) => item.id === data.id ? data : item)
+      .sort((a, b) => a.code.localeCompare(b.code)));
+    setEditingRawMaterial(null);
+    setRawMaterialEditForm(emptyRawMaterial);
+    showSuccess("Matéria-prima atualizada.");
   }
 
   async function approveBudgetItem(item) {
@@ -1580,8 +1645,33 @@ export default function ProductManager() {
 
       {viewMode === "materials" && (
         <section className="materials-manager panel">
-          <div className="panel-heading"><div><span className="form-step">Cadastro mestre</span><h2>Códigos de matéria-prima</h2></div><div className="panel-heading-actions"><span>{rawMaterials.length} códigos</span><button onClick={()=>setRawMaterialOpen(true)} type="button">+ Matéria-prima</button></div></div>
-          <div className="materials-grid">{rawMaterials.map((material)=><article key={material.id}><a className="material-code material-code-link" href={`/materias-primas/${material.id}`} title="Ver histórico de cotações">{material.code}</a><div><strong>{material.name}</strong><small>{material.unit_type} · {material.is_provisional ? "Provisório" : "Código oficial"}</small></div><button className="material-edit-code" title="Editar código" aria-label={`Editar código ${material.code}`} onClick={async()=>{const code=window.prompt("Novo código da matéria-prima:",material.code)?.trim().toUpperCase();if(!code||code===material.code)return;const{data,error}=await supabase.from("raw_materials").update({code}).eq("id",material.id).select("id, code, name, unit_type, is_provisional, created_at").single();if(error){setErrorMessage(error.message);return}setRawMaterials(current=>current.map(item=>item.id===material.id?data:item));showSuccess("Código atualizado.")}} type="button"><ActionIcon name="edit" /></button></article>)}</div>
+          <div className="panel-heading">
+            <div><span className="form-step">Cadastro mestre</span><h2>Códigos de matéria-prima</h2></div>
+            <div className="panel-heading-actions">
+              <span>{rawMaterials.length} códigos</span>
+              <button onClick={() => setRawMaterialOpen(true)} type="button">+ Matéria-prima</button>
+            </div>
+          </div>
+          <div className="materials-grid">
+            {rawMaterials.map((material) => (
+              <article key={material.id}>
+                <a className="material-code material-code-link" href={`/materias-primas/${material.id}`} title="Ver histórico de cotações">{material.code}</a>
+                <div>
+                  <strong>{material.name}</strong>
+                  <small>{material.unit_type} · {material.is_provisional ? "Provisório" : "Código oficial"}</small>
+                </div>
+                <button
+                  aria-label={`Editar matéria-prima ${material.code}`}
+                  className="material-edit-code"
+                  onClick={() => openRawMaterialEditor(material)}
+                  title="Editar matéria-prima"
+                  type="button"
+                >
+                  <ActionIcon name="edit" />
+                </button>
+              </article>
+            ))}
+          </div>
         </section>
       )}
 
@@ -1682,12 +1772,27 @@ export default function ProductManager() {
         </form>
       </FormModal>
 
-      <FormModal description="O código ficará disponível para estruturas de produtos, fornecedores e cotações." eyebrow="Cadastro mestre" onClose={()=>setRawMaterialOpen(false)} open={rawMaterialOpen} title="Nova matéria-prima">
+      <FormModal description="O código ficará disponível para estruturas de produtos, fornecedores e cotações." eyebrow="Cadastro mestre" onClose={() => setRawMaterialOpen(false)} open={rawMaterialOpen} title="Nova matéria-prima">
         <form className="modal-form" onSubmit={addRawMaterial}>
-          <label>Código<input autoFocus required value={rawMaterialForm.code} onChange={(e)=>setRawMaterialForm({...rawMaterialForm,code:e.target.value})} placeholder="Ex.: MP-0001" /></label>
-          <label>Unidade<select value={rawMaterialForm.unitType} onChange={(e)=>setRawMaterialForm({...rawMaterialForm,unitType:e.target.value})}>{["UN","PC","KIT","CX","KG","M","L","H"].map((unit)=><option key={unit}>{unit}</option>)}</select></label>
-          <label className="wide">Descrição<input required value={rawMaterialForm.name} onChange={(e)=>setRawMaterialForm({...rawMaterialForm,name:e.target.value})} placeholder="Ex.: Chapa inox 2mm" /></label>
-          <footer className="modal-form-actions"><button onClick={()=>setRawMaterialOpen(false)} type="button">Cancelar</button><button type="submit">Cadastrar matéria-prima</button></footer>
+          <label>Código<input autoFocus required value={rawMaterialForm.code} onChange={(event) => setRawMaterialForm({ ...rawMaterialForm, code: event.target.value })} placeholder="Ex.: MP-0001" /></label>
+          <label>Unidade<select value={rawMaterialForm.unitType} onChange={(event) => setRawMaterialForm({ ...rawMaterialForm, unitType: event.target.value })}>{["UN", "PC", "KIT", "CX", "KG", "M", "L", "H"].map((unit) => <option key={unit}>{unit}</option>)}</select></label>
+          <label className="wide">Descrição<input required value={rawMaterialForm.name} onChange={(event) => setRawMaterialForm({ ...rawMaterialForm, name: event.target.value })} placeholder="Ex.: Chapa inox 2mm" /></label>
+          <footer className="modal-form-actions"><button disabled={isSavingRawMaterial} onClick={() => setRawMaterialOpen(false)} type="button">Cancelar</button><button disabled={isSavingRawMaterial} type="submit">{isSavingRawMaterial ? "Cadastrando..." : "Cadastrar matéria-prima"}</button></footer>
+        </form>
+      </FormModal>
+
+      <FormModal
+        description={editingRawMaterial ? `Atualize os dados mestres de ${editingRawMaterial.code}. As alterações serão refletidas nas buscas e nos vínculos futuros.` : "Atualize os dados da matéria-prima."}
+        eyebrow="Cadastro mestre"
+        onClose={() => setEditingRawMaterial(null)}
+        open={Boolean(editingRawMaterial)}
+        title="Editar matéria-prima"
+      >
+        <form className="modal-form" onSubmit={updateRawMaterial}>
+          <label>Código<input autoFocus required value={rawMaterialEditForm.code} onChange={(event) => setRawMaterialEditForm({ ...rawMaterialEditForm, code: event.target.value })} /></label>
+          <label>Unidade<select value={rawMaterialEditForm.unitType} onChange={(event) => setRawMaterialEditForm({ ...rawMaterialEditForm, unitType: event.target.value })}>{["UN", "PC", "KIT", "CX", "KG", "M", "L", "H"].map((unit) => <option key={unit}>{unit}</option>)}</select></label>
+          <label className="wide">Descrição<input required value={rawMaterialEditForm.name} onChange={(event) => setRawMaterialEditForm({ ...rawMaterialEditForm, name: event.target.value })} /></label>
+          <footer className="modal-form-actions"><button disabled={isSavingRawMaterial} onClick={() => setEditingRawMaterial(null)} type="button">Cancelar</button><button disabled={isSavingRawMaterial} type="submit">{isSavingRawMaterial ? "Salvando..." : "Salvar alterações"}</button></footer>
         </form>
       </FormModal>
 

@@ -4475,3 +4475,55 @@ button.profile-task-open:focus-visible {
   .composition-detail-actions select,
   .composition-detail-actions button { width: 100%; justify-content: center; }
 }
+
+/* Respiro interno da ficha completa do produto */
+.form-modal-xlarge .form-modal-body {
+  padding: 28px 32px 34px;
+}
+
+.product-detail-overlay {
+  padding: 4px 2px 10px;
+}
+
+.product-detail-overlay .detail-top {
+  margin: 0 0 20px;
+  padding: 18px 20px;
+}
+
+.product-detail-overlay .product-detail-nav {
+  top: -28px;
+  margin-bottom: 20px;
+}
+
+.product-detail-overlay > .tab-panel {
+  gap: 20px;
+  padding: 20px;
+  border: 1px solid #dce5ed;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #fff 72%, #f7f9fc);
+}
+
+.product-detail-overlay > .tab-panel .detail-grid {
+  gap: 14px;
+  margin-bottom: 4px;
+}
+
+.product-detail-overlay > .tab-panel .tab-panel-add-bar {
+  margin: -2px 0 2px;
+  padding: 14px 15px;
+}
+
+@media (max-width: 700px) {
+  .form-modal-xlarge .form-modal-body {
+    padding: 18px;
+  }
+
+  .product-detail-overlay {
+    padding: 0;
+  }
+
+  .product-detail-overlay > .tab-panel {
+    gap: 16px;
+    padding: 15px;
+  }
+}

@@ -220,6 +220,13 @@
   gap: 18px;
 }
 
+.column {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  min-width: 0;
+}
+
 .panel {
   min-width: 0;
   padding: 19px;

@@ -595,7 +595,6 @@ export default function AppShell({ children }) {
               <ManagerActivityDashboard
                 onOpenDevelopmentTask={openDevelopmentTask}
                 onOpenIssues={() => openPage("issues")}
-                onOpenProducts={openProduct}
               />
             </section>
           )}
