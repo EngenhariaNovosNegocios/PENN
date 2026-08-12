@@ -26,6 +26,7 @@ export default function FormModal({
   children,
   size = "medium",
   closeLabel = "Fechar cadastro",
+  accentStyle,
 }) {
   const titleId = useId();
   const descriptionId = useId();
@@ -111,9 +112,10 @@ export default function FormModal({
         aria-describedby={description ? descriptionId : undefined}
         aria-labelledby={titleId}
         aria-modal="true"
-        className={`form-modal form-modal-${size}`}
+        className={`form-modal form-modal-${size} ${accentStyle ? "form-modal-accent" : ""}`}
         ref={dialogRef}
         role="dialog"
+        style={accentStyle}
         tabIndex={-1}
       >
         <header className="form-modal-header">

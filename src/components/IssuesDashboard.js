@@ -106,6 +106,15 @@ export default function IssuesDashboard({ onOpenProduct }) {
     priorityFilter,
   ]);
 
+  useEffect(() => {
+    if (message !== "Problema registrado com sucesso.") {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => setMessage(""), 10000);
+    return () => window.clearTimeout(timer);
+  }, [message]);
+
   async function resolveIssue(note) {
     const issue = resolutionIssue;
     if (!issue || !note?.trim() || note.trim().length < 10) return;

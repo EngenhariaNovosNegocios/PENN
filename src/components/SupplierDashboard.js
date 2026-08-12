@@ -101,8 +101,16 @@ function formatMoney(value, currency = "BRL") {
   });
 }
 
+function categoryVisual(category) {
+  const value = category || "Matéria-prima";
+  const hash = Array.from(value).reduce((total, character) => total + character.charCodeAt(0), 0);
+  const hues = [207, 171, 38, 266, 12, 329, 190, 93];
+  return { "--category-hue": hues[hash % hues.length] };
+}
+
 export default function SupplierDashboard() {
   const [suppliers, setSuppliers] = useState([]);
+  const [products, setProducts] = useState([]);
   const [materials, setMaterials] = useState([]);
   const [structures, setStructures] = useState([]);
   const [materialLinks, setMaterialLinks] = useState([]);
@@ -129,8 +137,9 @@ export default function SupplierDashboard() {
   const [materialLinkOpen, setMaterialLinkOpen] = useState(false);
 
   async function load() {
-    const [supplierResult, materialResult, structureResult, linkResult, contactResult, attachmentResult, quotationResult] = await Promise.all([
+    const [supplierResult, productResult, materialResult, structureResult, linkResult, contactResult, attachmentResult, quotationResult] = await Promise.all([
       supabase.from("suppliers").select("*").order("name"),
+      supabase.from("products").select("id,category"),
       supabase.from("raw_materials").select("id,code,name").order("code"),
       supabase.from("product_structure_items").select("id,product_id,material_code,description,quantity"),
       supabase.from("supplier_materials").select("*"),
@@ -139,12 +148,21 @@ export default function SupplierDashboard() {
       supabase.from("supplier_material_quotations").select("*").order("quoted_at", { ascending: false }).limit(30),
     ]);
 
-    const loadError = supplierResult.error || materialResult.error || linkResult.error;
+    const loadError =
+      supplierResult.error ||
+      productResult.error ||
+      materialResult.error ||
+      structureResult.error ||
+      linkResult.error ||
+      contactResult.error ||
+      attachmentResult.error ||
+      quotationResult.error;
     if (loadError) {
       setMessage(`Não foi possível carregar o SRM: ${loadError.message}`);
     }
 
     setSuppliers(supplierResult.data ?? []);
+    setProducts(productResult.data ?? []);
     setMaterials(materialResult.data ?? []);
     setStructures(structureResult.data ?? []);
     setMaterialLinks(linkResult.data ?? []);
@@ -158,6 +176,30 @@ export default function SupplierDashboard() {
   const selected = suppliers.find((supplier) => supplier.id === selectedId);
   const selectedLinks = useMemo(() => materialLinks.filter((link) => link.supplier_id === selectedId), [materialLinks, selectedId]);
   const selectedContacts = useMemo(() => contacts.filter((contact) => contact.supplier_id === selectedId), [contacts, selectedId]);
+  const materialById = useMemo(
+    () => new Map(materials.map((material) => [material.id, material])),
+    [materials]
+  );
+  const structureUseCountByCode = useMemo(() => {
+    const counts = new Map();
+    structures.forEach((structure) => {
+      counts.set(structure.material_code, (counts.get(structure.material_code) ?? 0) + 1);
+    });
+    return counts;
+  }, [structures]);
+  const categoryByMaterialCode = useMemo(() => {
+    const productById = new Map(products.map((product) => [product.id, product]));
+    const categories = new Map();
+
+    structures.forEach((structure) => {
+      const category = productById.get(structure.product_id)?.category;
+      if (category && !categories.has(structure.material_code)) {
+        categories.set(structure.material_code, category);
+      }
+    });
+
+    return categories;
+  }, [products, structures]);
 
   function selectSupplier(id) {
     const supplier = suppliers.find((item) => item.id === id);
@@ -406,11 +448,13 @@ export default function SupplierDashboard() {
             <>
               <header className="supplier-detail-heading">
                 <div><span>Fornecedor selecionado</span><h2>{selected.name}</h2><small>{[selected.city, selected.country].filter(Boolean).join(" · ") || "Localização não informada"}</small></div>
-                <span className={`supplier-status ${selected.status}`}>{statusLabels[selected.status] || selected.status}</span>
+                <div className="supplier-heading-actions">
+                  <span className={`supplier-status ${selected.status}`}>{statusLabels[selected.status] || selected.status}</span>
+                  <button className="supplier-edit-button" onClick={() => { setEditForm({ ...emptySupplier, ...selected }); setEditOpen(true); }} type="button"><SupplierIcon name="edit"/>Editar fornecedor</button>
+                </div>
               </header>
 
               <section className="supplier-action-grid">
-                <button onClick={() => { setEditForm({ ...emptySupplier, ...selected }); setEditOpen(true); }} type="button"><span><SupplierIcon name="edit"/></span><div><strong>Editar cadastro</strong><small>Dados, status e avaliação</small></div><SupplierIcon name="arrow"/></button>
                 <button onClick={() => { setSupplierTab("data"); setShowContacts(true); }} type="button"><span><SupplierIcon name="users"/></span><div><strong>Contatos</strong><small>{selectedContacts.length} contatos adicionais</small></div><SupplierIcon name="arrow"/></button>
                 <button onClick={() => setSupplierTab("materials")} type="button"><span><SupplierIcon name="materials"/></span><div><strong>Matérias-primas</strong><small>{selectedLinks.length} itens fornecidos</small></div><SupplierIcon name="arrow"/></button>
               </section>
@@ -423,10 +467,12 @@ export default function SupplierDashboard() {
               {supplierTab === "data" && (
                 <div className="supplier-data-tab">
                   <div className="supplier-contact-grid">
+                    <div><small>CNPJ / identificação fiscal</small><strong>{selected.tax_id || "Não informado"}</strong></div>
                     <div><small>Contato principal</small><strong>{selected.contact_name || "Não informado"}</strong></div>
                     <div><small>E-mail</small><strong>{selected.email || "Não informado"}</strong></div>
                     <div><small>WhatsApp</small><strong>{selected.whatsapp || "Não informado"}</strong></div>
                     <div><small>Telefone</small><strong>{selected.phone || "Não informado"}</strong></div>
+                    <div><small>Website</small><strong>{selected.website || "Não informado"}</strong></div>
                     <div><small>Localização</small><strong>{[selected.city, selected.country].filter(Boolean).join(" · ") || "Não informada"}</strong></div>
                     <div><small>Avaliação</small><strong>{selected.rating ? `${selected.rating}/5` : "Sem avaliação"}</strong></div>
                   </div>
@@ -443,7 +489,14 @@ export default function SupplierDashboard() {
                         {selectedContacts.map((contact) => (
                           <article key={contact.id}>
                             <span className="supplier-contact-avatar">{contact.name.slice(0, 2).toUpperCase()}</span>
-                            <div><strong>{contact.name}</strong><small>{contact.role || "Função não informada"} · {contact.email || contact.phone || "Sem canal informado"}</small></div>
+                            <div className="supplier-contact-readonly">
+                              <header><strong>{contact.name}</strong><small>{contact.role || "Função não informada"}</small></header>
+                              <dl>
+                                <div><dt>E-mail</dt><dd>{contact.email || "Não informado"}</dd></div>
+                                <div><dt>Telefone</dt><dd>{contact.phone || "Não informado"}</dd></div>
+                                <div><dt>WhatsApp</dt><dd>{contact.whatsapp || "Não informado"}</dd></div>
+                              </dl>
+                            </div>
                             <span className="supplier-contact-row-actions"><button onClick={() => openContact(contact)} type="button">Editar</button><button onClick={() => removeContact(contact.id)} type="button">Excluir</button></span>
                           </article>
                         ))}
@@ -460,12 +513,12 @@ export default function SupplierDashboard() {
                 <section className="supplier-materials-tab">
                   <header><div><span>Portfólio do fornecedor</span><h3>Matérias-primas fornecidas</h3></div><button className="supplier-material-add" onClick={() => setMaterialLinkOpen(true)} type="button"><SupplierIcon name="plus"/>Vincular matéria-prima</button></header>
                   <div className="supplier-material-list compact">
-                    {selectedLinks.map((link) => { const material = materials.find((item) => item.id === link.raw_material_id); const uses = structures.filter((structure) => structure.material_code === material?.code); return (
-                      <article key={link.raw_material_id}>
+                    {selectedLinks.map((link) => { const material = materialById.get(link.raw_material_id); const uses = structureUseCountByCode.get(material?.code) ?? 0; const category = categoryByMaterialCode.get(material?.code) || "Matéria-prima"; return (
+                      <article key={link.raw_material_id} style={categoryVisual(category)}>
                         <span className="supplier-material-symbol"><SupplierIcon name="materials"/></span>
-                        <div><strong>{material?.name || "Matéria-prima"}</strong><small>{material?.code || "Sem código"} · usada em {uses.length} estruturas</small></div>
-                        <span className="supplier-material-price"><small>Último preço</small><strong>{formatMoney(link.last_price, link.currency)}</strong></span>
-                        <button className="material-commercial-trigger" onClick={() => openCommercialConditions(link)} type="button">Condições comerciais <SupplierIcon name="arrow"/></button>
+                        <div className="supplier-material-identity"><strong>{material?.code || "Sem código"}</strong><small>{material?.name || "Matéria-prima"}</small><em>{category}</em></div>
+                        <span className="supplier-material-price"><small>{uses} estruturas</small><strong>{formatMoney(link.last_price, link.currency)}</strong></span>
+                        <button className="material-commercial-trigger" onClick={() => openCommercialConditions(link)} type="button">Condições <SupplierIcon name="arrow"/></button>
                       </article>
                     ); })}
                     {!selectedLinks.length && <div className="supplier-empty"><strong>Nenhuma matéria-prima vinculada</strong><span>Use o botão acima para montar o portfólio deste fornecedor.</span></div>}

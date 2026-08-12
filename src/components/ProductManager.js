@@ -169,6 +169,16 @@ function categoryVisual(category) {
   return { "--category-hue": hues[hash % hues.length] };
 }
 
+function compareProductCodes(a, b) {
+  const inactiveOrder = Number(a.status === "inativo") - Number(b.status === "inativo");
+
+  return inactiveOrder || String(a.code ?? "").localeCompare(
+    String(b.code ?? ""),
+    "pt-BR",
+    { numeric: true, sensitivity: "base" }
+  );
+}
+
 function normalizeNcm(value) {
   return value?.replace(/\D/g, "") ?? "";
 }
@@ -512,10 +522,12 @@ export default function ProductManager() {
   const filteredProducts = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
 
-    return products.filter((product) =>
-      (!query || product.code?.toLowerCase().includes(query) || product.name?.toLowerCase().includes(query)) &&
-      (!categoryFilter || product.category === categoryFilter)
-    );
+    return products
+      .filter((product) =>
+        (!query || product.code?.toLowerCase().includes(query) || product.name?.toLowerCase().includes(query)) &&
+        (!categoryFilter || product.category === categoryFilter)
+      )
+      .sort(compareProductCodes);
   }, [products, searchTerm, categoryFilter]);
 
   function showSuccess(message) {
@@ -1158,8 +1170,10 @@ export default function ProductManager() {
           </div>
 
           <div className="product-list-items">
-            {filteredProducts.map((product) => {
+            {filteredProducts.map((product, productIndex) => {
               const openIssueCount = openIssueCountByProduct.get(product.id) ?? 0;
+              const startsInactiveGroup = product.status === "inativo" &&
+                filteredProducts[productIndex - 1]?.status !== "inativo";
               const visualState = openIssueCount > 0
                 ? "issue"
                 : product.status === "inativo"
@@ -1170,7 +1184,7 @@ export default function ProductManager() {
 
               return (
                 <div
-                  className={`code-row product-card-state-${visualState}`}
+                  className={`code-row product-card-state-${visualState} ${startsInactiveGroup ? "product-inactive-group-start" : ""}`}
                   key={product.id}
                   onClick={() => {
                     setSelectedId(product.id);
@@ -1230,6 +1244,7 @@ export default function ProductManager() {
 
         {viewMode === "detail" && (
         <FormModal
+          accentStyle={categoryVisual(selectedProduct?.category)}
           description={selectedProduct ? `${selectedProduct.code} · ${selectedProduct.category || "Sem categoria"}` : "Consulte os dados do produto."}
           eyebrow="Ficha completa do produto"
           onClose={() => setViewMode("catalog")}
@@ -1363,7 +1378,7 @@ export default function ProductManager() {
               )}
 
               {activeTab === "edit" && (
-                <section className="tab-panel" aria-label="Edicao do produto">
+                <section className="tab-panel product-edit-panel" aria-label="Edicao do produto">
                   <form
                     className="product-form edit-product-form"
                     onSubmit={updateSelectedProduct}
@@ -1559,20 +1574,6 @@ export default function ProductManager() {
                       <dt>NCM</dt>
                       <dd>{selectedProduct.ncm || "Nao informado"}</dd>
                     </div>
-                    <div>
-                      <dt>Base fiscal</dt>
-                      <dd>{selectedNcmTax ? "Cadastrada" : "Pendente"}</dd>
-                    </div>
-                    <div>
-                      <dt>Atualizacao</dt>
-                      <dd>
-                        {selectedNcmTax?.updated_at
-                          ? new Date(selectedNcmTax.updated_at).toLocaleDateString(
-                              "pt-BR"
-                            )
-                          : "Nao informado"}
-                      </dd>
-                    </div>
                   </dl>
 
                   <div className="text-block">
@@ -1698,12 +1699,15 @@ export default function ProductManager() {
           </div>
           <div className="materials-grid">
             {rawMaterials.map((material) => (
-              <article key={material.id}>
-                <a className="material-code material-code-link" href={`/materias-primas/${material.id}`} title="Ver histórico de cotações">{material.code}</a>
-                <div>
-                  <strong>{material.name}</strong>
-                  <small>{material.unit_type} · {material.is_provisional ? "Provisório" : "Código oficial"}</small>
-                </div>
+              <article className="raw-material-card" key={material.id} style={categoryVisual(material.unit_type)}>
+                <a className="raw-material-card-main" href={`/materias-primas/${material.id}`} title="Ver histórico de cotações">
+                  <span className="raw-material-type-icon"><ProductTypeIcon name="component" /></span>
+                  <span className="raw-material-identity">
+                    <strong>{material.code}</strong>
+                    <small>{material.name}</small>
+                    <em>{material.unit_type} · {material.is_provisional ? "Provisório" : "Código oficial"}</em>
+                  </span>
+                </a>
                 <button
                   aria-label={`Editar matéria-prima ${material.code}`}
                   className="material-edit-code"

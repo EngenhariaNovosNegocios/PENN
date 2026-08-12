@@ -343,26 +343,25 @@ export default function NewProductsDashboard() {
             selectedProject.projectTasks,
             stage.key
           );
-          const locked = stageState === "locked";
-          const open = !locked && expandedStage === stage.key;
+          const future = stageState === "locked";
+          const open = expandedStage === stage.key;
           const stageHint =
             stageState === "current"
               ? "Etapa atual"
               : stageState === "completed"
                 ? "Etapa concluída"
-                : "Disponível após concluir a etapa anterior";
+                : "Etapa futura · alterações permitidas";
 
           return (
             <article
-              className={`flow-stage ${stageState} ${open ? "open" : ""}`}
+              className={`flow-stage ${future ? "future" : stageState} ${open ? "open" : ""}`}
               key={stage.key}
             >
               <button
                 aria-expanded={open}
                 className="flow-stage-header"
-                disabled={locked}
                 onClick={() => setExpandedStage(open ? "" : stage.key)}
-                title={locked ? stageHint : undefined}
+                title={future ? "Abra para consultar ou ajustar as tarefas desta etapa futura" : undefined}
                 type="button"
               >
                 <span className={`flow-stage-number ${stage.color}`}>
@@ -375,7 +374,7 @@ export default function NewProductsDashboard() {
                   </small>
                 </div>
                 <div className="flow-stage-progress">
-                  <span>{locked ? "Bloqueada" : `${done}/${stageTasks.length}`}</span>
+                  <span>{done}/{stageTasks.length}</span>
                   <i>
                     <b
                       style={{
@@ -384,7 +383,7 @@ export default function NewProductsDashboard() {
                     />
                   </i>
                 </div>
-                <FlowIcon name={locked ? "lock" : "chevron"} />
+                <FlowIcon name="chevron" />
               </button>
 
               {open && (
