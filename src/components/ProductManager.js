@@ -201,7 +201,7 @@ function formatDateTime(value) {
     : "Data não informada";
 }
 
-export default function ProductManager() {
+export default function ProductManager({ readOnly = false }) {
   const [products, setProducts] = useState([]);
   const [structureItems, setStructureItems] = useState([]);
   const [issues, setIssues] = useState([]);
@@ -451,7 +451,7 @@ export default function ProductManager() {
   }
 
   async function createCategory(event) {
-    event.preventDefault();
+    if (blockReadOnly(event)) return;
     const name = categoryName.trim();
     if (!name) return;
     const { data, error } = await supabase.from("product_categories").insert({ name }).select("id, name").single();
@@ -536,6 +536,13 @@ export default function ProductManager() {
     window.setTimeout(() => setSuccessMessage(""), 2600);
   }
 
+  function blockReadOnly(event) {
+    event?.preventDefault?.();
+    if (!readOnly) return false;
+    setErrorMessage("Seu perfil de Colaborador permite consulta e inclusão de novas demandas, mas não altera cadastros.");
+    return true;
+  }
+
   function openTab(tabId) {
     setActiveTab(tabId);
   }
@@ -570,6 +577,7 @@ export default function ProductManager() {
   const updateStructureField = updateFormField(setStructureForm);
 
   async function setProductActivity(product, status) {
+    if (blockReadOnly()) return;
     if (!product || isUpdatingProductStatus) {
       return;
     }
@@ -600,6 +608,7 @@ export default function ProductManager() {
   }
 
   async function updateProductIcon(icon) {
+    if (blockReadOnly()) return;
     if (!iconProduct) {
       return;
     }
@@ -628,7 +637,7 @@ export default function ProductManager() {
   }
 
   async function addProduct(event) {
-    event.preventDefault();
+    if (blockReadOnly(event)) return;
 
     const nextProduct = {
       ...form,
@@ -674,7 +683,7 @@ export default function ProductManager() {
   }
 
   async function updateSelectedProduct(event) {
-    event.preventDefault();
+    if (blockReadOnly(event)) return;
 
     if (!selectedProduct) {
       return;
@@ -737,6 +746,7 @@ export default function ProductManager() {
   }
 
   async function deleteSelectedProduct() {
+    if (blockReadOnly()) return;
     if (!selectedProduct) {
       return;
     }
@@ -792,7 +802,7 @@ export default function ProductManager() {
   }
 
   async function addStructureItem(event) {
-    event.preventDefault();
+    if (blockReadOnly(event)) return;
 
     if (!selectedProduct) {
       return;
@@ -840,6 +850,7 @@ export default function ProductManager() {
   }
 
   async function deleteStructureItem(itemId) {
+    if (blockReadOnly()) return;
     setErrorMessage("");
 
     const { error } = await supabase
@@ -859,6 +870,7 @@ export default function ProductManager() {
   }
 
   async function resolveIssue(resolutionNote) {
+    if (blockReadOnly()) return;
     const issue = resolutionIssue;
     if (!issue || !resolutionNote?.trim()) {
       setErrorMessage("Escreva uma justificativa para resolver o problema.");
@@ -895,7 +907,7 @@ export default function ProductManager() {
   }
 
   async function addBudgetItem(event) {
-    event.preventDefault();
+    if (blockReadOnly(event)) return;
     if (!selectedProduct || !budgetItem.itemName.trim() || Number(budgetItem.amount) < 0 || Number(budgetItem.quantity) <= 0 || Number(budgetItem.mkp) <= 0) return;
     setIsSavingBudget(true); setErrorMessage("");
     const { data, error } = await supabase.from("product_budget_items").insert({
@@ -914,13 +926,14 @@ export default function ProductManager() {
   }
 
   async function deleteBudgetItem(id) {
+    if (blockReadOnly()) return;
     const { error } = await supabase.from("product_budget_items").delete().eq("id", id);
     if (error) { setErrorMessage(`Nao foi possivel excluir o item: ${error.message}`); return; }
     setBudgetItems((current) => current.filter((item) => item.id !== id)); showSuccess("Item removido do orçamento.");
   }
 
   async function addRawMaterial(event) {
-    event.preventDefault();
+    if (blockReadOnly(event)) return;
     setIsSavingRawMaterial(true);
     setErrorMessage("");
     const { data, error } = await supabase
@@ -957,7 +970,7 @@ export default function ProductManager() {
   }
 
   async function updateRawMaterial(event) {
-    event.preventDefault();
+    if (blockReadOnly(event)) return;
     if (!editingRawMaterial) return;
 
     setIsSavingRawMaterial(true);
@@ -988,12 +1001,14 @@ export default function ProductManager() {
   }
 
   async function approveBudgetItem(item) {
+    if (blockReadOnly()) return;
     const { data, error } = await supabase.from("product_budget_items").update({ approved: !item.approved }).eq("id", item.id).select(budgetColumns).single();
     if (error) { setErrorMessage(`Nao foi possível atualizar a aprovação: ${error.message}`); return; }
     setBudgetItems((current) => current.map((currentItem) => currentItem.id === item.id ? data : currentItem));
   }
 
   async function includeProvisionalStructure(item) {
+    if (blockReadOnly()) return;
     const provisionalCode = `PROV-${selectedProduct.code}-${item.id}`;
     const { data: structureItem, error } = await supabase.from("product_structure_items").insert({ product_id: selectedProduct.id, material_code: provisionalCode, description: item.item_name, quantity: item.quantity }).select(structureColumns).single();
     if (error) { setErrorMessage(`Nao foi possível incluir na estrutura: ${error.message}`); return; }
@@ -1002,6 +1017,7 @@ export default function ProductManager() {
   }
 
   async function promoteProvisionalCode(item) {
+    if (blockReadOnly()) return;
     const finalCode = window.prompt("Informe o código definitivo da matéria-prima:", item.item_code || "");
     if (!finalCode?.trim()) return;
     const normalizedCode = finalCode.trim().toUpperCase();
@@ -1013,7 +1029,7 @@ export default function ProductManager() {
   }
 
   async function uploadAttachment(event) {
-    event.preventDefault();
+    if (blockReadOnly(event)) return;
     const formElement = event.currentTarget;
     const file = documentFile;
     const kind = documentType === "Foto do produto" ? "photo" : "document";
@@ -1072,6 +1088,7 @@ export default function ProductManager() {
   }
 
   async function deleteAttachment(attachment) {
+    if (blockReadOnly()) return;
     if (!window.confirm(`Excluir ${attachment.name}?`)) return;
     setErrorMessage("");
     const { error } = await supabase.from("product_attachments").delete().eq("id", attachment.id);
@@ -1085,7 +1102,7 @@ export default function ProductManager() {
   }
 
   return (
-    <main className="workspace">
+    <main className={`workspace ${readOnly ? "is-read-only" : ""}`}>
       <header className="page-header">
         <div>
           <p className="eyebrow">Portal Engenharia de Novos Negocios</p>
@@ -1096,7 +1113,7 @@ export default function ProductManager() {
           </p>
         </div>
         <div className="page-header-actions">
-          <button title="Importar planilha" aria-label="Importar planilha" onClick={() => setViewMode("import")} type="button">⇧<span>Importar</span></button>
+          {!readOnly && <button title="Importar planilha" aria-label="Importar planilha" onClick={() => setViewMode("import")} type="button">⇧<span>Importar</span></button>}
         </div>
       </header>
 
@@ -1154,7 +1171,7 @@ export default function ProductManager() {
             <span className="issue-overview">
               <strong>{issues.length}</strong> pendências abertas
             </span>
-            <button className="compact-add-product" onClick={() => setProductCreateOpen(true)} type="button">+ Produto</button>
+            {!readOnly && <button className="compact-add-product" onClick={() => setProductCreateOpen(true)} type="button">+ Produto</button>}
           </div>
 
           <div className="list-controls">
@@ -1209,6 +1226,7 @@ export default function ProductManager() {
                   <button
                     aria-label={`Alterar tipo visual de ${product.name}`}
                     className={`product-type-trigger ${product.status === "inativo" ? "inactive" : ""}`}
+                    disabled={readOnly}
                     onClick={(event) => {
                       event.stopPropagation();
                       setIconProduct(product);
@@ -1265,6 +1283,7 @@ export default function ProductManager() {
                   <button
                     aria-label="Alterar tipo visual do produto"
                     className={`product-type-trigger large ${selectedProduct.status === "inativo" ? "inactive" : ""}`}
+                    disabled={readOnly}
                     onClick={() => setIconProduct(selectedProduct)}
                     style={categoryVisual(selectedProduct.category)}
                     type="button"
@@ -1277,7 +1296,7 @@ export default function ProductManager() {
                     <small>{selectedProduct.category || "Sem categoria"}</small>
                   </div>
                 </div>
-                <div className="detail-actions">
+                {!readOnly && <div className="detail-actions">
                   <span className={`status-badge ${selectedProduct.status}`}>
                     {statusOptions[selectedProduct.status]?.label ??
                       selectedProduct.status}
@@ -1308,7 +1327,7 @@ export default function ProductManager() {
                   >
                     {isDeletingProduct ? "Excluindo..." : "Excluir"}
                   </button>
-                </div>
+                </div>}
               </div>
 
               <nav className="product-detail-nav" role="tablist" aria-label="Dados do produto">
@@ -1564,7 +1583,7 @@ export default function ProductManager() {
 
               {activeTab === "compositions" && (
                 <section className="tab-panel composition-tab-panel" aria-label="Composições do produto">
-                  <ProductCompositions product={selectedProduct} />
+                  <ProductCompositions product={selectedProduct} readOnly={readOnly} />
                 </section>
               )}
 
@@ -1695,7 +1714,7 @@ export default function ProductManager() {
             <div><span className="form-step">Cadastro mestre</span><h2>Códigos de matéria-prima</h2></div>
             <div className="panel-heading-actions">
               <span>{rawMaterials.length} códigos</span>
-              <button onClick={() => setRawMaterialOpen(true)} type="button">+ Matéria-prima</button>
+              {!readOnly && <button onClick={() => setRawMaterialOpen(true)} type="button">+ Matéria-prima</button>}
             </div>
           </div>
           <div className="materials-grid">
@@ -1712,6 +1731,7 @@ export default function ProductManager() {
                 <button
                   aria-label={`Editar matéria-prima ${material.code}`}
                   className="material-edit-code"
+                  disabled={readOnly}
                   onClick={() => openRawMaterialEditor(material)}
                   title="Editar matéria-prima"
                   type="button"
@@ -1724,7 +1744,7 @@ export default function ProductManager() {
         </section>
       )}
 
-      {viewMode === "suppliers" && <SupplierDashboard />}
+      {viewMode === "suppliers" && <SupplierDashboard readOnly={readOnly} />}
 
       {viewMode === "import" && <SpreadsheetImport onImported={() => window.setTimeout(() => window.location.reload(), 900)} />}
 

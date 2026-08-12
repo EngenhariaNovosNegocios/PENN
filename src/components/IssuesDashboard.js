@@ -23,7 +23,11 @@ function IssueIcon({ name }) {
   return <svg aria-hidden="true" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8">{paths[name]}</svg>;
 }
 
-export default function IssuesDashboard({ onOpenProduct }) {
+export default function IssuesDashboard({
+  canCreateDemand = true,
+  onOpenProduct,
+  readOnly = false,
+}) {
   const [products, setProducts] = useState([]);
   const [issues, setIssues] = useState([]);
   const [resolvedIssues, setResolvedIssues] = useState([]);
@@ -116,6 +120,10 @@ export default function IssuesDashboard({ onOpenProduct }) {
   }, [message]);
 
   async function resolveIssue(note) {
+    if (readOnly) {
+      setMessage("Seu perfil permite consultar e registrar demandas, mas não resolvê-las.");
+      return;
+    }
     const issue = resolutionIssue;
     if (!issue || !note?.trim() || note.trim().length < 10) return;
     setResolving(true);
@@ -132,6 +140,10 @@ export default function IssuesDashboard({ onOpenProduct }) {
 
   async function registerIssue(event) {
     event.preventDefault();
+    if (!canCreateDemand) {
+      setMessage("Seu perfil não permite registrar novas demandas.");
+      return;
+    }
     const product = products.find((item) => item.code.toLowerCase() === form.productCode.trim().toLowerCase());
     if (!product) { setMessage("Informe um código de produto válido."); return; }
     setSubmitting(true); setMessage("");
@@ -163,7 +175,7 @@ export default function IssuesDashboard({ onOpenProduct }) {
 
       <section className="issues-create-bar">
         <div><span className="panel-kicker">Registro rápido</span><strong>Encontrou um impedimento em um produto?</strong></div>
-        <button onClick={() => setRegisterOpen(true)} type="button"><IssueIcon name="plus"/>Registrar nova pendência</button>
+        {canCreateDemand && <button onClick={() => setRegisterOpen(true)} type="button"><IssueIcon name="plus"/>Registrar nova pendência</button>}
       </section>
       {message && <p className={message.includes("sucesso") || message.includes("histórico") ? "issue-form-message success" : "issue-form-message"}>{message}</p>}
 
@@ -203,7 +215,7 @@ export default function IssuesDashboard({ onOpenProduct }) {
                 <div><strong>{product.code}</strong><h3>{product.name}</h3></div>
                 <span>{productIssues.length} {productIssues.length === 1 ? "pendência" : "pendências"}</span>
               </header>
-              <div>{productIssues.map((issue, index) => { const isOverdue = issue.due_date && new Date(`${issue.due_date}T23:59:59`) < new Date(); const isTargeted = Number(issue.id) === highlightedIssueId; return <div className={`global-issue-row ${isTargeted ? "targeted" : ""}`} id={`product-issue-${issue.id}`} key={issue.id} tabIndex={isTargeted ? -1 : undefined}><span className="issue-order">{String(index + 1).padStart(2,"0")}</span><div><strong>{issue.description}</strong><span><i className={`priority-dot ${priorityMeta[issue.priority]?.className || "medium"}`}/>{priorityMeta[issue.priority]?.label || "Média"}{issue.assignee_name ? ` · ${issue.assignee_name}` : ""}</span></div><span className={isOverdue ? "issue-deadline overdue" : "issue-deadline"}><IssueIcon name="calendar"/>{issue.due_date ? new Date(`${issue.due_date}T12:00:00`).toLocaleDateString("pt-BR") : "Sem prazo"}</span><button className="resolve-issue-button" onClick={() => setResolutionIssue(issue)}>Resolver</button></div>})}</div>
+              <div>{productIssues.map((issue, index) => { const isOverdue = issue.due_date && new Date(`${issue.due_date}T23:59:59`) < new Date(); const isTargeted = Number(issue.id) === highlightedIssueId; return <div className={`global-issue-row ${isTargeted ? "targeted" : ""}`} id={`product-issue-${issue.id}`} key={issue.id} tabIndex={isTargeted ? -1 : undefined}><span className="issue-order">{String(index + 1).padStart(2,"0")}</span><div><strong>{issue.description}</strong><span><i className={`priority-dot ${priorityMeta[issue.priority]?.className || "medium"}`}/>{priorityMeta[issue.priority]?.label || "Média"}{issue.assignee_name ? ` · ${issue.assignee_name}` : ""}</span></div><span className={isOverdue ? "issue-deadline overdue" : "issue-deadline"}><IssueIcon name="calendar"/>{issue.due_date ? new Date(`${issue.due_date}T12:00:00`).toLocaleDateString("pt-BR") : "Sem prazo"}</span>{!readOnly && <button className="resolve-issue-button" onClick={() => setResolutionIssue(issue)}>Resolver</button>}</div>})}</div>
             </article>
           ))}
           {groups.length === 0 && <div className="issues-empty"><IssueIcon name="alert"/><strong>Nenhuma pendência encontrada</strong><span>Não há ocorrências abertas com este filtro.</span></div>}

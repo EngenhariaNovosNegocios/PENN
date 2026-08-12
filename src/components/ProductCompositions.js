@@ -56,7 +56,7 @@ function formatMoney(value) {
   });
 }
 
-export default function ProductCompositions({ product }) {
+export default function ProductCompositions({ product, readOnly = false }) {
   const [packages, setPackages] = useState([]);
   const [items, setItems] = useState([]);
   const [ncmTaxes, setNcmTaxes] = useState([]);
@@ -167,6 +167,7 @@ export default function ProductCompositions({ product }) {
 
   async function createPackage(event) {
     event.preventDefault();
+    if (readOnly) return;
     setSaving(true);
     setMessage("");
     const { data, error } = await supabase
@@ -226,6 +227,7 @@ export default function ProductCompositions({ product }) {
 
   async function saveItem(event) {
     event.preventDefault();
+    if (readOnly) return;
     if (!selectedPackageId) return;
 
     setSaving(true);
@@ -268,6 +270,7 @@ export default function ProductCompositions({ product }) {
   }
 
   async function updatePackage(pkg, changes) {
+    if (readOnly) return;
     const { data, error } = await supabase
       .from("quotation_packages")
       .update(changes)
@@ -284,6 +287,7 @@ export default function ProductCompositions({ product }) {
   }
 
   async function clonePackage(pkg) {
+    if (readOnly) return;
     setSaving(true);
     const { data: clone, error } = await supabase
       .from("quotation_packages")
@@ -323,6 +327,7 @@ export default function ProductCompositions({ product }) {
   }
 
   async function deletePackage() {
+    if (readOnly) return;
     if (!deletingPackage) return;
 
     setSaving(true);
@@ -345,6 +350,7 @@ export default function ProductCompositions({ product }) {
   }
 
   async function deleteItem(item) {
+    if (readOnly) return;
     const { error } = await supabase.from("quotation_package_items").delete().eq("id", item.id);
     if (error) setMessage(error.message);
     else setItems((current) => current.filter((currentItem) => currentItem.id !== item.id));
@@ -362,7 +368,7 @@ export default function ProductCompositions({ product }) {
           <h3>Composições de {product.code}</h3>
           <p>Cada pacote pertence exclusivamente a este produto.</p>
         </div>
-        <button onClick={() => setPackageOpen(true)} type="button"><CompositionIcon name="plus"/>Nova composição</button>
+        {!readOnly && <button onClick={() => setPackageOpen(true)} type="button"><CompositionIcon name="plus"/>Nova composição</button>}
       </header>
 
       {message && <div className="composition-message" role="status">{message}</div>}
@@ -398,21 +404,21 @@ export default function ProductCompositions({ product }) {
               <div><span>{selectedPackage.provisional_code || product.code}</span><h4>{selectedPackage.name}</h4><small>{selectedPackage.supplier || "Fornecedor não definido"}</small></div>
               <div className="composition-detail-actions">
                 <select aria-label="Status da composição" value={selectedPackage.status} onChange={(event) => updatePackage(selectedPackage, { status: event.target.value })}>{Object.entries(packageStatus).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
-                <button disabled={saving} onClick={() => clonePackage(selectedPackage)} title="Duplicar composição" type="button"><CompositionIcon name="copy"/>Duplicar</button>
-                <button className="danger" onClick={() => setDeletingPackage(selectedPackage)} title="Excluir composição" type="button"><CompositionIcon name="trash"/></button>
+                {!readOnly && <button disabled={saving} onClick={() => clonePackage(selectedPackage)} title="Duplicar composição" type="button"><CompositionIcon name="copy"/>Duplicar</button>}
+                {!readOnly && <button className="danger" onClick={() => setDeletingPackage(selectedPackage)} title="Excluir composição" type="button"><CompositionIcon name="trash"/></button>}
               </div>
             </header>
 
             <div className="composition-detail-summary">
               {Object.entries(packageTotals(selectedPackage)).map(([label, value]) => <div key={label}><span>{label.toUpperCase()}</span><strong>{formatMoney(value)}</strong></div>)}
-              <button onClick={() => { setEditingItemId(null); setItemForm(emptyItem); setItemOpen(true); }} type="button"><CompositionIcon name="plus"/>Adicionar componente</button>
+              {!readOnly && <button onClick={() => { setEditingItemId(null); setItemForm(emptyItem); setItemOpen(true); }} type="button"><CompositionIcon name="plus"/>Adicionar componente</button>}
             </div>
 
             <div className="composition-items">
               <header><span>Componente</span><span>Origem</span><span>EXW</span><span>FOB</span><span>NET</span><span>Ações</span></header>
               {selectedItems.map((item) => {
                 const values = calculateItem(item);
-                return <div key={item.id}><span><strong>{item.description}</strong><small>{item.quantity} {item.unit_type}{item.ncm ? ` · NCM ${item.ncm}` : ""}</small></span><span><strong>{item.currency}</strong><small>{item.item_code || item.sap_code || "Sem código"}</small></span><span>{formatMoney(values.exw)}</span><span>{formatMoney(values.fob)}</span><strong>{formatMoney(values.net)}</strong><span className="composition-item-actions"><button onClick={() => editItem(item)} type="button">Editar</button><button onClick={() => deleteItem(item)} type="button">Excluir</button></span></div>;
+                return <div key={item.id}><span><strong>{item.description}</strong><small>{item.quantity} {item.unit_type}{item.ncm ? ` · NCM ${item.ncm}` : ""}</small></span><span><strong>{item.currency}</strong><small>{item.item_code || item.sap_code || "Sem código"}</small></span><span>{formatMoney(values.exw)}</span><span>{formatMoney(values.fob)}</span><strong>{formatMoney(values.net)}</strong>{!readOnly && <span className="composition-item-actions"><button onClick={() => editItem(item)} type="button">Editar</button><button onClick={() => deleteItem(item)} type="button">Excluir</button></span>}</div>;
               })}
               {!selectedItems.length && <div className="composition-items-empty">Adicione componentes para calcular EXW, FOB e NET.</div>}
             </div>

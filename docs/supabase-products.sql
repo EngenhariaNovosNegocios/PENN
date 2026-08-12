@@ -287,14 +287,21 @@ create table if not exists public.user_profiles (
   email text not null unique,
   area text,
   phone text,
-  role text not null default 'colaborador' check (role in ('colaborador','gerente','admin')),
+  role text not null default 'colaborador' check (role in ('colaborador','engenharia','gerente','admin')),
   last_login_at timestamptz,
   updated_at timestamptz not null default now()
 );
 
 alter table public.user_profiles
 add column if not exists role text not null default 'colaborador'
-check (role in ('colaborador','gerente','admin'));
+check (role in ('colaborador','engenharia','gerente','admin'));
+
+alter table public.user_profiles
+drop constraint if exists user_profiles_role_check;
+
+alter table public.user_profiles
+add constraint user_profiles_role_check
+check (role in ('colaborador','engenharia','gerente','admin'));
 
 alter table public.user_profiles
 add column if not exists last_login_at timestamptz;
@@ -431,6 +438,7 @@ insert into storage.buckets (id, name, public)
 values ('product-files', 'product-files', true)
 on conflict (id) do update set public = excluded.public;
 
+alter table public.products enable row level security;
 alter table public.product_structure_items enable row level security;
 alter table public.product_issues enable row level security;
 alter table public.ncm_taxes enable row level security;
@@ -712,13 +720,20 @@ create table if not exists public.authorized_users (
   full_name text not null,
   email text not null unique check (email = lower(email)),
   area text,
-  role text not null default 'colaborador' check (role in ('colaborador','gerente','admin')),
+  role text not null default 'colaborador' check (role in ('colaborador','engenharia','gerente','admin')),
   active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
 alter table public.authorized_users enable row level security;
+
+alter table public.authorized_users
+drop constraint if exists authorized_users_role_check;
+
+alter table public.authorized_users
+add constraint authorized_users_role_check
+check (role in ('colaborador','engenharia','gerente','admin'));
 
 insert into public.authorized_users (email, full_name, role, active)
 select
@@ -773,8 +788,19 @@ as $$
   );
 $$;
 
+create or replace function public.current_user_can_edit_operations()
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select public.current_user_access_role() in ('engenharia', 'gerente', 'admin');
+$$;
+
 grant execute on function public.is_authorized_user(text) to anon, authenticated;
 grant execute on function public.current_user_access_role() to authenticated;
+grant execute on function public.current_user_can_edit_operations() to authenticated;
 grant select, insert, update on public.authorized_users to authenticated;
 grant usage, select on sequence public.authorized_users_id_seq to authenticated;
 
@@ -803,3 +829,116 @@ for update
 to authenticated
 using (public.current_user_access_role() = 'admin')
 with check (public.current_user_access_role() = 'admin');
+
+-- RBAC operacional. Colaboradores consultam a base e podem inserir novas
+-- demandas; Engenharia, Gerencia e Admin podem manter os dados operacionais.
+revoke insert, update, delete on
+  public.products,
+  public.product_structure_items,
+  public.product_issues,
+  public.product_attachments,
+  public.product_development_projects,
+  public.product_development_tasks,
+  public.product_budget_items,
+  public.raw_materials,
+  public.product_categories,
+  public.product_development_task_attachments,
+  public.product_launch_date_history,
+  public.quotation_packages,
+  public.quotation_package_items,
+  public.product_strategic_profiles,
+  public.product_strategic_history,
+  public.product_development_project_history,
+  public.suppliers,
+  public.supplier_products,
+  public.supplier_materials,
+  public.supplier_contacts,
+  public.supplier_material_attachments,
+  public.supplier_material_quotations,
+  public.personal_tasks
+from anon;
+
+do $$
+declare
+  guarded_table text;
+begin
+  foreach guarded_table in array array[
+    'products',
+    'product_structure_items',
+    'product_issues',
+    'product_attachments',
+    'product_development_projects',
+    'product_development_tasks',
+    'product_budget_items',
+    'raw_materials',
+    'product_categories',
+    'product_development_task_attachments',
+    'product_launch_date_history',
+    'quotation_packages',
+    'quotation_package_items',
+    'product_strategic_profiles',
+    'product_strategic_history',
+    'product_development_project_history',
+    'suppliers',
+    'supplier_products',
+    'supplier_materials',
+    'supplier_contacts',
+    'supplier_material_attachments',
+    'supplier_material_quotations',
+    'personal_tasks'
+  ] loop
+    execute format('drop policy if exists "rbac_update_guard" on public.%I', guarded_table);
+    execute format(
+      'create policy "rbac_update_guard" on public.%I as restrictive for update to authenticated using (public.current_user_can_edit_operations()) with check (public.current_user_can_edit_operations())',
+      guarded_table
+    );
+    execute format('drop policy if exists "rbac_delete_guard" on public.%I', guarded_table);
+    execute format(
+      'create policy "rbac_delete_guard" on public.%I as restrictive for delete to authenticated using (public.current_user_can_edit_operations())',
+      guarded_table
+    );
+  end loop;
+
+  foreach guarded_table in array array[
+    'product_structure_items',
+    'product_attachments',
+    'product_budget_items',
+    'raw_materials',
+    'product_categories',
+    'product_development_task_attachments',
+    'product_launch_date_history',
+    'quotation_packages',
+    'quotation_package_items',
+    'product_strategic_profiles',
+    'product_strategic_history',
+    'product_development_project_history',
+    'suppliers',
+    'supplier_products',
+    'supplier_materials',
+    'supplier_contacts',
+    'supplier_material_attachments',
+    'supplier_material_quotations'
+  ] loop
+    execute format('drop policy if exists "rbac_insert_guard" on public.%I', guarded_table);
+    execute format(
+      'create policy "rbac_insert_guard" on public.%I as restrictive for insert to authenticated with check (public.current_user_can_edit_operations())',
+      guarded_table
+    );
+  end loop;
+end
+$$;
+
+drop policy if exists "rbac_insert_guard" on public.products;
+create policy "rbac_insert_guard"
+on public.products
+as restrictive
+for insert
+to authenticated
+with check (
+  public.current_user_can_edit_operations()
+  or (
+    public.current_user_access_role() = 'colaborador'
+    and code is null
+    and status = 'avaliacao'
+  )
+);

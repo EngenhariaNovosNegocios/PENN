@@ -13,8 +13,16 @@ const emptyUser = {
 
 const roleLabels = {
   colaborador: "Colaborador",
+  engenharia: "Engenharia",
   gerente: "Gerente",
   admin: "Admin",
+};
+
+const roleDescriptions = {
+  colaborador: "Somente consulta e inclusão de novas demandas",
+  engenharia: "Operação geral, sem Gerência e Acessos",
+  gerente: "Operação geral com painel da Gerência",
+  admin: "Acesso completo e gestão de usuários",
 };
 
 function AccessIcon({ name }) {
@@ -230,6 +238,9 @@ export default function AccessManagementDashboard() {
                   <strong>{user.full_name || "Sem nome"}</strong>
                   <small>{user.email}</small>
                   <small>{user.area || "Sem area"}</small>
+                  <small className="access-role-description">
+                    {roleDescriptions[user.role]}
+                  </small>
                 </div>
                 <select
                   disabled={!canManage || user.email === currentUser?.email}
@@ -273,7 +284,7 @@ export default function AccessManagementDashboard() {
           <label className="wide">Nome completo<input autoFocus disabled={!canManage} name="fullName" onChange={updateField} placeholder="Nome da pessoa" required value={form.fullName}/></label>
           <label className="wide">E-mail<input disabled={!canManage} name="email" onChange={updateField} placeholder="nome@empresa.com" required type="email" value={form.email}/></label>
           <label>Area<input disabled={!canManage} name="area" onChange={updateField} placeholder="Ex.: Engenharia" value={form.area}/></label>
-          <label>Perfil<select disabled={!canManage} name="role" onChange={updateField} value={form.role}>{Object.entries(roleLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+          <label>Perfil<select disabled={!canManage} name="role" onChange={updateField} value={form.role}>{Object.entries(roleLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><small>{roleDescriptions[form.role]}</small></label>
           <footer className="modal-form-actions"><button onClick={() => setCreateOpen(false)} type="button">Cancelar</button><button disabled={!canManage || saving} type="submit">{saving ? "Cadastrando..." : "Cadastrar pessoa"}</button></footer>
         </form>
       </FormModal>

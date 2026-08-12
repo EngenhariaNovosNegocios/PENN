@@ -122,8 +122,10 @@ function dueWeight(dueDate) {
 }
 
 export default function UserProfileDashboard({
+  canCreateDemand = true,
   onOpenIssue,
   onOpenDevelopmentTask,
+  readOnly = false,
 }) {
   const [user, setUser] = useState(null);
   const [allTasks, setAllTasks] = useState([]);
@@ -304,6 +306,11 @@ export default function UserProfileDashboard({
   async function createPersonal(event) {
     event.preventDefault();
 
+    if (!canCreateDemand) {
+      setMessage("Seu perfil não permite registrar novas atividades.");
+      return;
+    }
+
     if (!user?.id) {
       setMessage("Entre com um usuário para criar uma atividade pessoal.");
       return;
@@ -336,6 +343,10 @@ export default function UserProfileDashboard({
   }
 
   async function togglePersonal(item) {
+    if (readOnly) {
+      setMessage("Seu perfil de Colaborador permite consulta e inclusão de novas demandas.");
+      return;
+    }
     const completedAt = item.completed_at ? null : new Date().toISOString();
     const { data, error } = await supabase
       .from("personal_tasks")
@@ -400,6 +411,7 @@ export default function UserProfileDashboard({
                 : `Concluir atividade ${activity.title}`
             }
             className={`profile-task-check ${activity.completed ? "completed" : ""}`}
+            disabled={readOnly}
             onClick={() => togglePersonal(activity.personal)}
             title={activity.completed ? "Reabrir atividade" : "Marcar como concluída"}
             type="button"
@@ -588,14 +600,14 @@ export default function UserProfileDashboard({
                   <strong>{openPersonal.length}</strong>
                 </button>
               </div>
-              <button
+              {canCreateDemand && <button
                 className="profile-focus-add"
                 onClick={() => setCreateOpen(true)}
                 type="button"
               >
                 <TaskIcon name="plus" />
                 Adicionar nova tarefa
-              </button>
+              </button>}
             </aside>
           </div>
         </section>
@@ -643,10 +655,10 @@ export default function UserProfileDashboard({
           </div>
 
           <footer className="profile-list-footer">
-            <button onClick={() => setCreateOpen(true)} type="button">
+            {canCreateDemand && <button onClick={() => setCreateOpen(true)} type="button">
               <TaskIcon name="plus" />
               Adicionar nova tarefa
-            </button>
+            </button>}
             <span>Crie uma atividade pessoal para não perder nenhum acompanhamento.</span>
           </footer>
         </section>

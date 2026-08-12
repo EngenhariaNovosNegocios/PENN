@@ -27,7 +27,7 @@ function LegacyQuotationWorkspace({project,packages,items,selectedPackageId,setS
   return <section className="quotation-workspace"><header><div><span className="panel-kicker">Composições complexas</span><h2>Pacotes de cotação</h2><p>Organize chicotes, kits e conjuntos sem misturar todos os componentes.</p></div><button onClick={()=>setShowForm(!showForm)}>+ Novo pacote</button></header>{showForm&&<form className="quotation-package-form" onSubmit={createPackage}><input required value={packageForm.name} onChange={(e)=>setPackageForm({...packageForm,name:e.target.value})} placeholder="Nome do conjunto"/><input value={packageForm.provisionalCode} onChange={(e)=>setPackageForm({...packageForm,provisionalCode:e.target.value})} placeholder="Código provisório"/><input value={packageForm.supplier} onChange={(e)=>setPackageForm({...packageForm,supplier:e.target.value})} placeholder="Fornecedor"/><select value={packageForm.currency} onChange={(e)=>setPackageForm({...packageForm,currency:e.target.value})}><option>BRL</option><option>USD</option></select><input type="date" value={packageForm.dueDate} onChange={(e)=>setPackageForm({...packageForm,dueDate:e.target.value})}/><button>Criar</button></form>}<div className="quotation-layout"><aside>{projectPackages.map((pkg)=>{const packageItems=items.filter((item)=>item.package_id===pkg.id);return <div className={`quotation-package-card ${selectedPackageId===pkg.id?"active":""}`} key={pkg.id}><button className="quotation-package-select" onClick={()=>{setSelectedPackageId(pkg.id);cancelEditItem()}}><span><strong>{pkg.name}</strong><small>{packageItems.length} componentes · {pkg.status}</small></span><b>{total(packageItems).toLocaleString(pkg.currency==="USD"?"en-US":"pt-BR",{style:"currency",currency:pkg.currency})}</b></button><button className="quotation-package-delete" aria-label={`Excluir pacote ${pkg.name}`} title="Excluir pacote" onClick={()=>deletePackage(pkg)}>×</button></div>})}</aside>{selected&&<div className="quotation-detail"><header><div><strong>{selected.name}</strong><small>{selected.supplier||"Fornecedor não definido"}</small></div><select value={selected.status} onChange={(e)=>updateStatus(selected,e.target.value)}><option value="draft">Em elaboração</option><option value="waiting_supplier">Aguardando fornecedor</option><option value="received">Recebida</option><option value="analysis">Em análise</option><option value="approved">Aprovada</option><option value="rejected">Reprovada</option></select></header><form className={`quotation-item-form ${editingItemId?"editing":""}`} onSubmit={saveItem}><input value={itemForm.code} onChange={(e)=>setItemForm({...itemForm,code:e.target.value})} placeholder="Código"/><input required value={itemForm.description} onChange={(e)=>setItemForm({...itemForm,description:e.target.value})} placeholder="Componente ou serviço"/><input aria-label="Quantidade" min=".01" step=".01" type="number" value={itemForm.quantity} onChange={(e)=>setItemForm({...itemForm,quantity:e.target.value})} placeholder="Qtd."/><select aria-label="Unidade" value={itemForm.unitType} onChange={(e)=>setItemForm({...itemForm,unitType:e.target.value})}>{["UN","PC","KIT","CX","KG","M","L","H"].map(u=><option key={u}>{u}</option>)}</select><input min="0" required step=".01" type="number" value={itemForm.unitPrice} onChange={(e)=>setItemForm({...itemForm,unitPrice:e.target.value})} placeholder="Valor unit."/><input min=".01" step=".01" type="number" value={itemForm.mkp} onChange={(e)=>setItemForm({...itemForm,mkp:e.target.value})} placeholder="MKP"/><input min="0" step=".01" type="number" value={itemForm.overhead} onChange={(e)=>setItemForm({...itemForm,overhead:e.target.value})} placeholder="Overhead %"/><div className="quotation-form-actions"><button>{editingItemId?"Salvar":"Adicionar"}</button>{editingItemId&&<button type="button" className="cancel" onClick={cancelEditItem}>Cancelar</button>}</div></form><div className="quotation-items">{selectedItems.map((item)=><div key={item.id}><span><strong>{item.description}</strong><small>{item.item_code||"Sem código"} · {item.quantity} {item.unit_type} · MKP {item.mkp} · Overhead {item.overhead_rate}%</small></span><b>{total([item]).toLocaleString(selected.currency==="USD"?"en-US":"pt-BR",{style:"currency",currency:selected.currency})}</b><div className="quotation-item-actions"><button onClick={()=>startEditItem(item)}>Editar</button><button className="delete" onClick={()=>deleteItem(item)}>Excluir</button></div></div>)}</div></div>}</div></section>;
 }
 
-function QuotationWorkspace({project,packages,items,selectedPackageId,setSelectedPackageId,showForm,setShowForm,packageForm,setPackageForm,itemForm,setItemForm,createPackage,saveItem,updateStatus,editingItemId,startEditItem,cancelEditItem,deleteItem,deletePackage,clonePackage,togglePackageTotal}) {
+function QuotationWorkspace({project,packages,items,selectedPackageId,setSelectedPackageId,showForm,setShowForm,packageForm,setPackageForm,itemForm,setItemForm,createPackage,saveItem,updateStatus,editingItemId,startEditItem,cancelEditItem,deleteItem,deletePackage,clonePackage,togglePackageTotal,readOnly=false}) {
   const [ncmTaxes,setNcmTaxes]=useState([]);
   const [itemFormOpen,setItemFormOpen]=useState(false);
   useEffect(()=>{supabase.from("ncm_taxes").select("*").order("ncm").then(({data})=>setNcmTaxes(data??[]));},[]);
@@ -39,7 +39,7 @@ function QuotationWorkspace({project,packages,items,selectedPackageId,setSelecte
   const selectedForTotal=projectPackages.filter(pkg=>pkg.include_in_total);
   const grandTotals=selectedForTotal.reduce((totals,pkg)=>{items.filter(item=>item.package_id===pkg.id).forEach(item=>{const value=amounts(item);totals.exw+=value.exw;totals.fob+=value.fob;totals.net+=value.net;});return totals;},{exw:0,fob:0,net:0});
   const format=(value,currency)=>Number(value).toLocaleString(currency==="USD"?"en-US":"pt-BR",{style:"currency",currency});
-  return <section className="quotation-workspace">
+  return <section className={`quotation-workspace ${readOnly ? "is-read-only" : ""}`}>
     <header><div><span className="panel-kicker">Composições complexas</span><h2>Pacotes de cotação</h2><p>Organize conjuntos, compare propostas e escolha quais entram no total consolidado.</p></div><button onClick={()=>setShowForm(!showForm)}>+ Novo pacote</button></header>
     <FormModal description={`O pacote será adicionado ao projeto ${productCodeLabel(project.product)} e poderá receber componentes e impostos.`} eyebrow="Nova composição" onClose={()=>setShowForm(false)} open={showForm} title="Criar pacote de cotação">
       <form className="modal-form" onSubmit={createPackage}>
@@ -74,7 +74,10 @@ function QuotationWorkspace({project,packages,items,selectedPackageId,setSelecte
   </section>;
 }
 
-export default function NewProductsDashboard() {
+export default function NewProductsDashboard({
+  canCreateDemand = true,
+  readOnly = false,
+}) {
   const [products, setProducts] = useState([]);
   const [projects, setProjects] = useState([]);
   const [tasks, setTasks] = useState([]);
@@ -215,6 +218,10 @@ export default function NewProductsDashboard() {
 
   async function createProject(event) {
     event.preventDefault();
+    if (!canCreateDemand) {
+      setMessage("Seu perfil não permite iniciar novas demandas.");
+      return;
+    }
     const productName = form.productName.trim();
 
     if (!productName) {
@@ -306,6 +313,7 @@ export default function NewProductsDashboard() {
   }
 
   async function updateTask(task, status) {
+    if (readOnly) return;
     const completedAt = status === "completed" ? new Date().toISOString() : null;
     const { error } = await supabase.from("product_development_tasks").update({ status, completed_at: completedAt }).eq("id", task.id);
     if (error) { setMessage(`Não foi possível atualizar: ${error.message}`); return; }
@@ -315,6 +323,7 @@ export default function NewProductsDashboard() {
 
   async function assignProductCode(event) {
     event.preventDefault();
+    if (readOnly) return;
     const code = productCodeDraft.trim().toUpperCase();
 
     if (!selectedProject?.product || !code) {
@@ -398,42 +407,45 @@ export default function NewProductsDashboard() {
     window.dispatchEvent(new CustomEvent("penn:tasks-changed"));
   }
 
-  async function assignTask(task){const available=userProfiles.map(profile=>profile.full_name).filter(Boolean).join(", ");const name=window.prompt(`Nome do responsável cadastrado:\n${available}`,task.assignee_name||"");if(name===null)return;const profile=userProfiles.find(item=>item.full_name?.toLowerCase()===name.trim().toLowerCase());if(!profile){setMessage("Selecione um nome existente no cadastro de usuários.");return;}const dueDate=window.prompt("Prazo da tarefa (AAAA-MM-DD):",task.due_date||"");if(dueDate===null)return;const{data,error}=await supabase.from("product_development_tasks").update({assignee_name:profile.full_name,assignee_email:profile.email,due_date:dueDate.trim()||null}).eq("id",task.id).select("*").single();if(error){setMessage(error.message);return;}setTasks(current=>current.map(item=>item.id===task.id?data:item));window.dispatchEvent(new CustomEvent("penn:tasks-changed"));setMessage("Responsável e prazo da tarefa atualizados.");}
+  async function assignTask(task){if(readOnly)return;const available=userProfiles.map(profile=>profile.full_name).filter(Boolean).join(", ");const name=window.prompt(`Nome do responsável cadastrado:\n${available}`,task.assignee_name||"");if(name===null)return;const profile=userProfiles.find(item=>item.full_name?.toLowerCase()===name.trim().toLowerCase());if(!profile){setMessage("Selecione um nome existente no cadastro de usuários.");return;}const dueDate=window.prompt("Prazo da tarefa (AAAA-MM-DD):",task.due_date||"");if(dueDate===null)return;const{data,error}=await supabase.from("product_development_tasks").update({assignee_name:profile.full_name,assignee_email:profile.email,due_date:dueDate.trim()||null}).eq("id",task.id).select("*").single();if(error){setMessage(error.message);return;}setTasks(current=>current.map(item=>item.id===task.id?data:item));window.dispatchEvent(new CustomEvent("penn:tasks-changed"));setMessage("Responsável e prazo da tarefa atualizados.");}
 
   async function saveTaskNote(task) {
+    if (readOnly) return;
     const notes = taskNotes[task.id] ?? task.notes ?? "";
     const { error } = await supabase.from("product_development_tasks").update({ notes }).eq("id", task.id);
     if (!error) { setTasks((current)=>current.map((item)=>item.id===task.id?{...item,notes}:item)); setMessage("Observação salva."); }
   }
 
   async function uploadTaskAttachment(task, file) {
+    if (readOnly) return;
     if (!file) return; const path=`development/${task.project_id}/${task.id}/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g,"-")}`;
     const { error: uploadError }=await supabase.storage.from("product-files").upload(path,file,{contentType:file.type}); if(uploadError){setMessage(uploadError.message);return;}
     const { data:urlData }=supabase.storage.from("product-files").getPublicUrl(path); const {data,error}=await supabase.from("product_development_task_attachments").insert({task_id:task.id,name:file.name,storage_path:path,public_url:urlData.publicUrl}).select("*").single(); if(!error)setTaskAttachments((current)=>[...current,data]);
   }
 
   async function changeLaunchDate(value) {
+    if (readOnly) return;
     const oldDate=selectedProject.target_launch_date; if(value===oldDate)return; const reason=window.prompt("Motivo da alteração da data prevista:"); if(!reason?.trim())return;
     const {error}=await supabase.from("product_development_projects").update({target_launch_date:value||null,updated_at:new Date().toISOString()}).eq("id",selectedProject.id); if(error){setMessage(error.message);return;}
     const {data}=await supabase.from("product_launch_date_history").insert({project_id:selectedProject.id,old_date:oldDate||null,new_date:value||null,reason:reason.trim()}).select("*").single(); setProjects((current)=>current.map((p)=>p.id===selectedProject.id?{...p,target_launch_date:value||null}:p)); if(data)setLaunchHistory((current)=>[data,...current]);
   }
 
   async function createQuotationPackage(event) {
-    event.preventDefault(); const {data,error}=await supabase.from("quotation_packages").insert({product_id:selectedProject.product_id,project_id:selectedProject.id,name:packageForm.name.trim(),supplier:packageForm.supplier.trim()||null,currency:"BRL",due_date:packageForm.dueDate||null,include_in_total:false}).select("*").single();
+    event.preventDefault(); if(readOnly)return; const {data,error}=await supabase.from("quotation_packages").insert({product_id:selectedProject.product_id,project_id:selectedProject.id,name:packageForm.name.trim(),supplier:packageForm.supplier.trim()||null,currency:"BRL",due_date:packageForm.dueDate||null,include_in_total:false}).select("*").single();
     if(error){setMessage(error.message);return;} setQuotationPackages((current)=>[data,...current]);setSelectedPackageId(data.id);setPackageForm(emptyPackage);setShowPackageForm(false);
   }
 
   async function saveQuotationItem(event) {
-    event.preventDefault(); const payload={package_id:selectedPackageId,item_code:packageItemForm.partNumber.trim()||null,sap_code:packageItemForm.sapCode.trim()||null,description:packageItemForm.description.trim(),quantity:Number(packageItemForm.quantity),unit_type:packageItemForm.unitType,unit_price:Number(packageItemForm.unitPrice),mkp:1,overhead_rate:packageItemForm.overhead===""?0:Number(packageItemForm.overhead),currency:packageItemForm.currency,exchange_rate:packageItemForm.currency==="USD"?Number(packageItemForm.exchangeRate):1,ncm:packageItemForm.ncm.trim()||null,apply_ipi:packageItemForm.applyIpi,apply_pis:packageItemForm.applyPis,apply_cofins:packageItemForm.applyCofins,apply_icms:packageItemForm.applyIcms,apply_import_tax:packageItemForm.applyImportTax};
+    event.preventDefault(); if(readOnly)return; const payload={package_id:selectedPackageId,item_code:packageItemForm.partNumber.trim()||null,sap_code:packageItemForm.sapCode.trim()||null,description:packageItemForm.description.trim(),quantity:Number(packageItemForm.quantity),unit_type:packageItemForm.unitType,unit_price:Number(packageItemForm.unitPrice),mkp:1,overhead_rate:packageItemForm.overhead===""?0:Number(packageItemForm.overhead),currency:packageItemForm.currency,exchange_rate:packageItemForm.currency==="USD"?Number(packageItemForm.exchangeRate):1,ncm:packageItemForm.ncm.trim()||null,apply_ipi:packageItemForm.applyIpi,apply_pis:packageItemForm.applyPis,apply_cofins:packageItemForm.applyCofins,apply_icms:packageItemForm.applyIcms,apply_import_tax:packageItemForm.applyImportTax};
     const query=editingQuotationItemId?supabase.from("quotation_package_items").update(payload).eq("id",editingQuotationItemId):supabase.from("quotation_package_items").insert(payload);const{data,error}=await query.select("*").single();
     if(error){setMessage(error.message);return false;}setQuotationItems((current)=>editingQuotationItemId?current.map((item)=>item.id===data.id?data:item):[...current,data]);setPackageItemForm(emptyPackageItem);setEditingQuotationItemId(null);setMessage(editingQuotationItemId?"Componente atualizado.":"Componente adicionado.");return true;
   }
 
   function startEditQuotationItem(item){setEditingQuotationItemId(item.id);setPackageItemForm({partNumber:item.item_code||"",sapCode:item.sap_code||"",description:item.description,quantity:String(item.quantity),unitType:item.unit_type,unitPrice:String(item.unit_price),overhead:item.overhead_rate?String(item.overhead_rate):"",currency:item.currency||"BRL",exchangeRate:item.currency==="USD"?String(item.exchange_rate||""):"1",ncm:item.ncm||"",applyIpi:Boolean(item.apply_ipi),applyPis:Boolean(item.apply_pis),applyCofins:Boolean(item.apply_cofins),applyIcms:Boolean(item.apply_icms),applyImportTax:Boolean(item.apply_import_tax)});}
   function cancelEditQuotationItem(){setEditingQuotationItemId(null);setPackageItemForm(emptyPackageItem);}
-  async function deleteQuotationItem(item){if(!window.confirm(`Excluir o componente "${item.description}" desta composição?`))return;const{error}=await supabase.from("quotation_package_items").delete().eq("id",item.id);if(error){setMessage(error.message);return;}setQuotationItems((current)=>current.filter((currentItem)=>currentItem.id!==item.id));if(editingQuotationItemId===item.id)cancelEditQuotationItem();setMessage("Componente excluído.");}
+  async function deleteQuotationItem(item){if(readOnly)return;if(!window.confirm(`Excluir o componente "${item.description}" desta composição?`))return;const{error}=await supabase.from("quotation_package_items").delete().eq("id",item.id);if(error){setMessage(error.message);return;}setQuotationItems((current)=>current.filter((currentItem)=>currentItem.id!==item.id));if(editingQuotationItemId===item.id)cancelEditQuotationItem();setMessage("Componente excluído.");}
 
-  async function updatePackageStatus(pkg,status){const{data,error}=await supabase.from("quotation_packages").update({status}).eq("id",pkg.id).select("*").single();if(!error)setQuotationPackages((current)=>current.map((item)=>item.id===pkg.id?data:item));}
+  async function updatePackageStatus(pkg,status){if(readOnly)return;const{data,error}=await supabase.from("quotation_packages").update({status}).eq("id",pkg.id).select("*").single();if(!error)setQuotationPackages((current)=>current.map((item)=>item.id===pkg.id?data:item));}
 
   async function deleteQuotationPackage(pkg){const packageItems=quotationItems.filter((item)=>item.package_id===pkg.id);const confirmation=packageItems.length?`O pacote "${pkg.name}" possui ${packageItems.length} componente(s). Excluir o pacote e todos eles?`:`Excluir o pacote "${pkg.name}"?`;if(!window.confirm(confirmation))return;const{error}=await supabase.from("quotation_packages").delete().eq("id",pkg.id);if(error){setMessage(error.message);return;}setQuotationPackages((current)=>current.filter((item)=>item.id!==pkg.id));setQuotationItems((current)=>current.filter((item)=>item.package_id!==pkg.id));if(selectedPackageId===pkg.id){setSelectedPackageId(null);cancelEditQuotationItem();}setMessage("Pacote de cotação excluído.");}
 
@@ -496,17 +508,17 @@ export default function NewProductsDashboard() {
   }
 
   if (workspaceView === "quotations") return (
-    <main className="flow-page quotation-dedicated-page">
+    <main className={`flow-page quotation-dedicated-page ${readOnly ? "is-read-only" : ""}`}>
       <button className="flow-back" onClick={() => { setWorkspaceView("portfolio"); setSelectedProjectId(null); }}><FlowIcon name="back"/> Voltar aos novos produtos</button>
       <section className="quotation-page-hero"><div><span className="panel-kicker">Central de custos</span><h1>Pacotes de cotação</h1><p>Monte composições, compare custos EXW, FOB e NET e consolide somente os pacotes selecionados.</p></div><label>Projeto em desenvolvimento<select value={selectedProjectId || ""} onChange={(event) => { setSelectedProjectId(Number(event.target.value)); setSelectedPackageId(null); cancelEditQuotationItem(); }}><option value="" disabled>Selecione um projeto</option>{activeProjects.map((project) => <option key={project.id} value={project.id}>{productCodeLabel(project.product)} · {project.product?.name}</option>)}</select></label></section>
-      {selectedProject ? <QuotationWorkspace project={selectedProject} packages={quotationPackages} items={quotationItems} selectedPackageId={selectedPackageId} setSelectedPackageId={setSelectedPackageId} showForm={showPackageForm} setShowForm={setShowPackageForm} packageForm={packageForm} setPackageForm={setPackageForm} itemForm={packageItemForm} setItemForm={setPackageItemForm} createPackage={createQuotationPackage} saveItem={saveQuotationItem} updateStatus={updatePackageStatus} editingItemId={editingQuotationItemId} startEditItem={startEditQuotationItem} cancelEditItem={cancelEditQuotationItem} deleteItem={deleteQuotationItem} deletePackage={deleteQuotationPackage} clonePackage={cloneQuotationPackage} togglePackageTotal={toggleQuotationPackageTotal} /> : <section className="quotation-page-empty"><strong>Nenhum projeto disponível</strong><span>Inicie um novo desenvolvimento para criar seus pacotes de cotação.</span></section>}
+      {selectedProject ? <QuotationWorkspace project={selectedProject} packages={quotationPackages} items={quotationItems} selectedPackageId={selectedPackageId} setSelectedPackageId={setSelectedPackageId} showForm={showPackageForm} setShowForm={setShowPackageForm} packageForm={packageForm} setPackageForm={setPackageForm} itemForm={packageItemForm} setItemForm={setPackageItemForm} createPackage={createQuotationPackage} saveItem={saveQuotationItem} updateStatus={updatePackageStatus} editingItemId={editingQuotationItemId} startEditItem={startEditQuotationItem} cancelEditItem={cancelEditQuotationItem} deleteItem={deleteQuotationItem} deletePackage={deleteQuotationPackage} clonePackage={cloneQuotationPackage} togglePackageTotal={toggleQuotationPackageTotal} readOnly={readOnly} /> : <section className="quotation-page-empty"><strong>Nenhum projeto disponível</strong><span>Inicie um novo desenvolvimento para criar seus pacotes de cotação.</span></section>}
     </main>
   );
 
   if (selectedProject) return (
-    <main className="flow-page"><button className="flow-back" onClick={() => openProject(null)}><FlowIcon name="back"/> Voltar aos projetos</button>
-      <section className="flow-detail-hero"><div><span>{productCodeLabel(selectedProject.product)}</span><h1>{selectedProject.product?.name}</h1><p>{selectedProject.development_reason || "Fluxo estruturado de desenvolvimento e lançamento."}</p><div className="flow-detail-actions"><button onClick={beginProjectEdit}>Editar dados do projeto</button><button className="archive-project-button" onClick={archiveProject}>Arquivar projeto</button></div></div><div className="flow-detail-score"><strong>{selectedProject.progress}%</strong><span>concluído</span></div></section>
-      <section className="flow-project-info"><div><span>Solicitante</span><strong>{selectedProject.requester || "Não definido"}</strong></div><div><span>Responsável</span><strong>{selectedProject.owner || "Não definido"}</strong></div><div className="launch-date-editor"><span>Lançamento previsto</span><input type="date" value={selectedProject.target_launch_date || ""} onChange={(event)=>changeLaunchDate(event.target.value)} /><small>{launchHistory.filter((item)=>item.project_id===selectedProject.id).length} alterações registradas</small></div><div><span>Preço objetivo</span><strong>{selectedProject.target_price ? Number(selectedProject.target_price).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "Não definido"}</strong></div></section>
+    <main className={`flow-page ${readOnly ? "is-read-only" : ""}`}><button className="flow-back" onClick={() => openProject(null)}><FlowIcon name="back"/> Voltar aos projetos</button>
+      <section className="flow-detail-hero"><div><span>{productCodeLabel(selectedProject.product)}</span><h1>{selectedProject.product?.name}</h1><p>{selectedProject.development_reason || "Fluxo estruturado de desenvolvimento e lançamento."}</p>{!readOnly && <div className="flow-detail-actions"><button onClick={beginProjectEdit}>Editar dados do projeto</button><button className="archive-project-button" onClick={archiveProject}>Arquivar projeto</button></div>}</div><div className="flow-detail-score"><strong>{selectedProject.progress}%</strong><span>concluído</span></div></section>
+      <section className="flow-project-info"><div><span>Solicitante</span><strong>{selectedProject.requester || "Não definido"}</strong></div><div><span>Responsável</span><strong>{selectedProject.owner || "Não definido"}</strong></div><div className="launch-date-editor"><span>Lançamento previsto</span><input disabled={readOnly} type="date" value={selectedProject.target_launch_date || ""} onChange={(event)=>changeLaunchDate(event.target.value)} /><small>{launchHistory.filter((item)=>item.project_id===selectedProject.id).length} alterações registradas</small></div><div><span>Preço objetivo</span><strong>{selectedProject.target_price ? Number(selectedProject.target_price).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "Não definido"}</strong></div></section>
       {editingProject&&<section className="project-edit-panel"><header><div><span className="panel-kicker">Edição auditável</span><h2>Dados iniciais do desenvolvimento</h2></div><button onClick={()=>setEditingProject(false)}>Fechar</button></header><form onSubmit={saveProjectEdit}><label>Solicitante<input value={projectEdit.requester} onChange={e=>setProjectEdit({...projectEdit,requester:e.target.value})}/></label><label>Responsável<input value={projectEdit.owner} onChange={e=>setProjectEdit({...projectEdit,owner:e.target.value})}/></label><label>Lançamento previsto<input type="date" value={projectEdit.target_launch_date} onChange={e=>setProjectEdit({...projectEdit,target_launch_date:e.target.value})}/></label><label>Preço objetivo<input type="number" step=".01" value={projectEdit.target_price} onChange={e=>setProjectEdit({...projectEdit,target_price:e.target.value})}/></label>{[["expected_demand","Demanda esperada"],["potential_clients","Clientes potenciais"],["market_potential","Mercado potencial"],["technical_specs","Especificações técnicas"],["development_reason","Motivo e diferencial"]].map(([field,label])=><label className="wide" key={field}>{label}<textarea rows="2" value={projectEdit[field]} onChange={e=>setProjectEdit({...projectEdit,[field]:e.target.value})}/></label>)}<footer><small>{projectHistory.filter(item=>item.project_id===selectedProject.id).length} alterações registradas</small><button>Salvar alterações</button></footer></form></section>}
       {launchHistory.some((item)=>item.project_id===selectedProject.id)&&<details className="launch-history"><summary>Histórico da previsão de lançamento</summary>{launchHistory.filter((item)=>item.project_id===selectedProject.id).map((item)=><div key={item.id}><strong>{item.old_date||"Sem data"} → {item.new_date||"Sem data"}</strong><span>{item.reason}</span><small>{new Date(item.changed_at).toLocaleString("pt-BR")}</small></div>)}</details>}
       <section className="flow-stage-list">
@@ -575,7 +587,7 @@ export default function NewProductsDashboard() {
                         : "Defina o código nesta etapa para publicar o item no catálogo de produtos."}
                     </small>
                   </div>
-                  <button
+                  {!readOnly && <button
                     onClick={() => {
                       setProductCodeDraft(selectedProject.product?.code || "");
                       setProductCodeOpen(true);
@@ -583,7 +595,7 @@ export default function NewProductsDashboard() {
                     type="button"
                   >
                     {selectedProject.product?.code ? "Revisar código" : "Definir código"}
-                  </button>
+                  </button>}
                 </div>
               )}
 
@@ -602,6 +614,7 @@ export default function NewProductsDashboard() {
                         <button
                           aria-label={`${task.status === "completed" ? "Reabrir" : "Concluir"} ${task.title}`}
                           className="flow-task-check"
+                          disabled={readOnly}
                           onClick={() =>
                             updateTask(
                               task,
@@ -620,13 +633,13 @@ export default function NewProductsDashboard() {
                               "Sem responsável"}
                           </small>
                         </span>
-                        <button
+                        {!readOnly && <button
                           className="task-assign-trigger"
                           onClick={() => assignTask(task)}
                           type="button"
                         >
                           Atribuir
-                        </button>
+                        </button>}
                         <button
                           className="task-detail-trigger"
                           onClick={() =>
@@ -640,6 +653,7 @@ export default function NewProductsDashboard() {
                         </button>
                         <select
                           aria-label={`Status de ${task.title}`}
+                          disabled={readOnly}
                           onChange={(event) =>
                             updateTask(task, event.target.value)
                           }
@@ -658,6 +672,7 @@ export default function NewProductsDashboard() {
                           <label>
                             Observações
                             <textarea
+                              disabled={readOnly}
                               onChange={(event) =>
                                 setTaskNotes((current) => ({
                                   ...current,
@@ -668,13 +683,13 @@ export default function NewProductsDashboard() {
                               value={taskNotes[task.id] ?? task.notes ?? ""}
                             />
                           </label>
-                          <button
+                          {!readOnly && <button
                             onClick={() => saveTaskNote(task)}
                             type="button"
                           >
                             Salvar observação
-                          </button>
-                          <label>
+                          </button>}
+                          {!readOnly && <label>
                             Anexar evidência
                             <input
                               onChange={(event) =>
@@ -685,7 +700,7 @@ export default function NewProductsDashboard() {
                               }
                               type="file"
                             />
-                          </label>
+                          </label>}
                           <div>
                             {taskAttachments
                               .filter((item) => item.task_id === task.id)
@@ -747,7 +762,7 @@ export default function NewProductsDashboard() {
   );
 
   return (
-    <main className="flow-page"><section className={`flow-hero ${showArchived?"archived-hero":""}`}><div><span><FlowIcon name="spark"/> {showArchived?"Arquivo de projetos":"Processo PENN"}</span><h1>{showArchived?"Projetos arquivados":"Desenvolvimento de novos produtos"}</h1><p>{showArchived?"Consulte projetos retirados do portfólio ativo, restaure-os ou faça uma exclusão definitiva e confirmada.":"Da oportunidade ao pós-lançamento: um fluxo único, rastreável e orientado a decisões."}</p><div>{!showArchived&&<button onClick={() => setShowForm(true)}>Iniciar novo desenvolvimento</button>}<button className="secondary" onClick={()=>setShowArchived(!showArchived)}>{showArchived?"Voltar aos projetos ativos":`Projetos arquivados (${archivedProjects.length})`} <FlowIcon name="arrow"/></button></div></div>{showArchived?<div className="flow-archive-count"><strong>{archivedProjects.length}</strong><span>projetos preservados</span></div>:<div className="flow-portfolio-chart"><div className="flow-task-pie" style={{background:`conic-gradient(#55d6a0 0 ${completedSlice}%,#56a8e8 ${completedSlice}% ${progressingSlice}%,#e26a5d ${progressingSlice}% ${blockedSlice}%,rgba(255,255,255,.18) ${blockedSlice}% 100%)`}}><span><strong>{activeTasks.length}</strong><small>tarefas</small></span></div><div><strong>Ritmo do portfólio</strong><span><i className="done"/>{completedTasks} concluídas</span><span><i className="doing"/>{progressingTasks} em andamento</span><span><i className="blocked"/>{blockedTasks} bloqueadas</span></div></div>}</section>
+    <main className={`flow-page ${readOnly ? "is-read-only" : ""}`}><section className={`flow-hero ${showArchived?"archived-hero":""}`}><div><span><FlowIcon name="spark"/> {showArchived?"Arquivo de projetos":"Processo PENN"}</span><h1>{showArchived?"Projetos arquivados":"Desenvolvimento de novos produtos"}</h1><p>{showArchived?"Consulte projetos retirados do portfólio ativo, restaure-os ou faça uma exclusão definitiva e confirmada.":"Da oportunidade ao pós-lançamento: um fluxo único, rastreável e orientado a decisões."}</p><div>{!showArchived&&canCreateDemand&&<button onClick={() => setShowForm(true)}>Iniciar novo desenvolvimento</button>}<button className="secondary" onClick={()=>setShowArchived(!showArchived)}>{showArchived?"Voltar aos projetos ativos":`Projetos arquivados (${archivedProjects.length})`} <FlowIcon name="arrow"/></button></div></div>{showArchived?<div className="flow-archive-count"><strong>{archivedProjects.length}</strong><span>projetos preservados</span></div>:<div className="flow-portfolio-chart"><div className="flow-task-pie" style={{background:`conic-gradient(#55d6a0 0 ${completedSlice}%,#56a8e8 ${completedSlice}% ${progressingSlice}%,#e26a5d ${progressingSlice}% ${blockedSlice}%,rgba(255,255,255,.18) ${blockedSlice}% 100%)`}}><span><strong>{activeTasks.length}</strong><small>tarefas</small></span></div><div><strong>Ritmo do portfólio</strong><span><i className="done"/>{completedTasks} concluídas</span><span><i className="doing"/>{progressingTasks} em andamento</span><span><i className="blocked"/>{blockedTasks} bloqueadas</span></div></div>}</section>
       {!showArchived&&<section className="flow-summary"><article><span>Projetos ativos</span><strong>{activeProjects.length}</strong></article><article><span>Em andamento</span><strong>{progressingTasks}</strong></article><article><span>Tarefas concluídas</span><strong>{completedTasks}</strong></article><article className="blocked"><span>Bloqueios</span><strong>{blockedTasks}</strong></article></section>}
       {message && <p className="flow-message">{message}</p>}
       <FormModal description="O projeto será criado sem código e começará pela etapa de levantamento. O código definitivo será atribuído somente na etapa 7." eyebrow="Novo fluxo" onClose={() => setShowForm(false)} open={showForm} size="large" title="Iniciar desenvolvimento">

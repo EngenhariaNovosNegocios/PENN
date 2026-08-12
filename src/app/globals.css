@@ -4798,3 +4798,40 @@ button.profile-task-open:focus-visible {
   .stage-product-code button { width: 100%; }
   .product-detail-overlay > .product-edit-panel { padding: 18px; }
 }
+.workspace.is-read-only .product-detail-nav button:nth-child(2),
+.workspace.is-read-only .tab-panel-add-bar > button,
+.workspace.is-read-only .ghost-danger-button,
+.workspace.is-read-only .issue-card-actions button,
+.workspace.is-read-only .budget-row-actions,
+.workspace.is-read-only .attachment-delete,
+.workspace.is-read-only .photo-card button,
+.workspace.is-read-only .material-edit-code,
+.flow-page.is-read-only .archive-card-actions,
+.quotation-workspace.is-read-only > header button,
+.quotation-workspace.is-read-only .quotation-total-check,
+.quotation-workspace.is-read-only .quotation-package-actions,
+.quotation-workspace.is-read-only .quotation-detail-actions,
+.quotation-workspace.is-read-only .quotation-item-actions {
+  display: none !important;
+}
+
+.workspace.is-read-only .product-type-trigger:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.supplier-commercial-fields:disabled {
+  border: 0;
+  margin: 0;
+  min-width: 0;
+  padding: 0;
+}
+
+.supplier-commercial-fields:disabled input,
+.supplier-commercial-fields:disabled select,
+.flow-page.is-read-only input:disabled,
+.flow-page.is-read-only select:disabled,
+.flow-page.is-read-only textarea:disabled {
+  cursor: default;
+  opacity: 0.78;
+}

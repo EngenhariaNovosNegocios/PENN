@@ -108,7 +108,7 @@ function categoryVisual(category) {
   return { "--category-hue": hues[hash % hues.length] };
 }
 
-export default function SupplierDashboard() {
+export default function SupplierDashboard({ readOnly = false }) {
   const [suppliers, setSuppliers] = useState([]);
   const [products, setProducts] = useState([]);
   const [materials, setMaterials] = useState([]);
@@ -228,8 +228,15 @@ export default function SupplierDashboard() {
     };
   }
 
+  function blockReadOnly(event) {
+    event?.preventDefault?.();
+    if (!readOnly) return false;
+    setMessage("Seu perfil de Colaborador permite somente consultar os fornecedores.");
+    return true;
+  }
+
   async function createSupplier(event) {
-    event.preventDefault();
+    if (blockReadOnly(event)) return;
     const { data, error } = await supabase.from("suppliers").insert(payload(createForm)).select("*").single();
     if (error) { setMessage(error.message); return; }
     setSuppliers((current) => [...current, data].sort((a, b) => a.name.localeCompare(b.name)));
@@ -241,7 +248,7 @@ export default function SupplierDashboard() {
   }
 
   async function updateSupplier(event) {
-    event.preventDefault();
+    if (blockReadOnly(event)) return;
     const { data, error } = await supabase
       .from("suppliers")
       .update({ ...payload(editForm), updated_at: new Date().toISOString() })
@@ -262,7 +269,7 @@ export default function SupplierDashboard() {
   }
 
   async function saveContact(event) {
-    event.preventDefault();
+    if (blockReadOnly(event)) return;
     const values = {
       name: contactForm.name.trim(),
       role: contactForm.role || null,
@@ -286,6 +293,7 @@ export default function SupplierDashboard() {
   }
 
   async function removeContact(id) {
+    if (blockReadOnly()) return;
     if (!window.confirm("Excluir este contato adicional?")) { return; }
     const { error } = await supabase.from("supplier_contacts").delete().eq("id", id);
     if (error) { setMessage(error.message); return; }
@@ -293,7 +301,7 @@ export default function SupplierDashboard() {
   }
 
   async function addMaterial(event) {
-    event.preventDefault();
+    if (blockReadOnly(event)) return;
     const material = materials.find((item) => item.code.toLowerCase() === linkMaterial.trim().toLowerCase() || String(item.id) === linkMaterial);
     if (!material) { setMessage("Matéria-prima não encontrada. Digite um código cadastrado."); return; }
     const row = { supplier_id: selectedId, raw_material_id: material.id, currency: "BRL" };
@@ -316,7 +324,7 @@ export default function SupplierDashboard() {
   }
 
   async function saveMaterial(event) {
-    event.preventDefault();
+    if (blockReadOnly(event)) return;
     if (!commercialLink) { return; }
     const values = {
       supplier_part_number: commercialDraft.supplier_part_number || null,
@@ -350,6 +358,7 @@ export default function SupplierDashboard() {
   }
 
   async function removeMaterial(rawMaterialId) {
+    if (blockReadOnly()) return;
     if (!window.confirm("Remover esta matéria-prima do fornecedor?")) { return; }
     const files = materialAttachments.filter((item) => item.supplier_id === selectedId && item.raw_material_id === rawMaterialId);
     const { error } = await supabase.from("supplier_materials").delete().eq("supplier_id", selectedId).eq("raw_material_id", rawMaterialId);
@@ -361,6 +370,7 @@ export default function SupplierDashboard() {
   }
 
   async function uploadMaterialAttachment(link, file) {
+    if (blockReadOnly()) return;
     if (!file) { return; }
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
     const storagePath = `supplier-materials/${selectedId}/${link.raw_material_id}/${Date.now()}-${safeName}`;
@@ -380,6 +390,7 @@ export default function SupplierDashboard() {
   }
 
   async function removeMaterialAttachment(item) {
+    if (blockReadOnly()) return;
     if (!window.confirm(`Excluir ${item.name}?`)) { return; }
     const { error } = await supabase.from("supplier_material_attachments").delete().eq("id", item.id);
     if (error) { setMessage(error.message); return; }
@@ -388,7 +399,7 @@ export default function SupplierDashboard() {
   }
 
   async function deleteSupplier(event) {
-    event.preventDefault();
+    if (blockReadOnly(event)) return;
     if (!selected || deleteVerification.trim() !== selected.name) { return; }
     const files = materialAttachments.filter((item) => item.supplier_id === selected.id);
     const { error } = await supabase.from("suppliers").delete().eq("id", selected.id);
@@ -409,7 +420,7 @@ export default function SupplierDashboard() {
   const averageRating = suppliers.filter((supplier) => Number(supplier.rating) > 0).reduce((sum, supplier) => sum + Number(supplier.rating), 0) / Math.max(1, suppliers.filter((supplier) => Number(supplier.rating) > 0).length);
 
   return (
-    <main className="supplier-page">
+    <main className={`supplier-page ${readOnly ? "is-read-only" : ""}`}>
       <section className="supplier-hero">
         <div><span>Supplier Relationship Management</span><h1>Fornecedores</h1><p>Gerencie sua rede, contatos e matérias-primas fornecidas em um único espaço.</p></div>
         <div className="supplier-hero-metrics"><span><strong>{suppliers.length}</strong><small>fornecedores</small></span><span><strong>{materialLinks.length}</strong><small>itens fornecidos</small></span><span><strong>{averageRating ? averageRating.toFixed(1) : "—"}</strong><small>avaliação média</small></span></div>
@@ -417,7 +428,7 @@ export default function SupplierDashboard() {
 
       <nav className="supplier-main-tabs">
         <button className="active" type="button">Rede de fornecedores <b>{suppliers.length}</b></button>
-        <button className="supplier-new-trigger" onClick={() => setCreateOpen(true)} type="button"><SupplierIcon name="plus"/>Novo fornecedor</button>
+        {!readOnly && <button className="supplier-new-trigger" onClick={() => setCreateOpen(true)} type="button"><SupplierIcon name="plus"/>Novo fornecedor</button>}
       </nav>
 
       {message && <p className="supplier-message">{message}</p>}
@@ -450,7 +461,7 @@ export default function SupplierDashboard() {
                 <div><span>Fornecedor selecionado</span><h2>{selected.name}</h2><small>{[selected.city, selected.country].filter(Boolean).join(" · ") || "Localização não informada"}</small></div>
                 <div className="supplier-heading-actions">
                   <span className={`supplier-status ${selected.status}`}>{statusLabels[selected.status] || selected.status}</span>
-                  <button className="supplier-edit-button" onClick={() => { setEditForm({ ...emptySupplier, ...selected }); setEditOpen(true); }} type="button"><SupplierIcon name="edit"/>Editar fornecedor</button>
+                  {!readOnly && <button className="supplier-edit-button" onClick={() => { setEditForm({ ...emptySupplier, ...selected }); setEditOpen(true); }} type="button"><SupplierIcon name="edit"/>Editar fornecedor</button>}
                 </div>
               </header>
 
@@ -484,7 +495,7 @@ export default function SupplierDashboard() {
 
                   {showContacts && (
                     <section className="supplier-contacts">
-                      <header><div><span>Equipe de contato</span><h3>Contatos adicionais</h3></div><button onClick={() => openContact()} type="button"><SupplierIcon name="plus"/>Adicionar contato</button></header>
+                      <header><div><span>Equipe de contato</span><h3>Contatos adicionais</h3></div>{!readOnly && <button onClick={() => openContact()} type="button"><SupplierIcon name="plus"/>Adicionar contato</button>}</header>
                       <div className="supplier-contact-list">
                         {selectedContacts.map((contact) => (
                           <article key={contact.id}>
@@ -497,7 +508,7 @@ export default function SupplierDashboard() {
                                 <div><dt>WhatsApp</dt><dd>{contact.whatsapp || "Não informado"}</dd></div>
                               </dl>
                             </div>
-                            <span className="supplier-contact-row-actions"><button onClick={() => openContact(contact)} type="button">Editar</button><button onClick={() => removeContact(contact.id)} type="button">Excluir</button></span>
+                            {!readOnly && <span className="supplier-contact-row-actions"><button onClick={() => openContact(contact)} type="button">Editar</button><button onClick={() => removeContact(contact.id)} type="button">Excluir</button></span>}
                           </article>
                         ))}
                         {!selectedContacts.length && <p>Nenhum contato adicional cadastrado.</p>}
@@ -505,13 +516,13 @@ export default function SupplierDashboard() {
                     </section>
                   )}
 
-                  <button className="supplier-danger-zone-trigger" onClick={() => { setDeleteVerification(""); setDeleteOpen(true); }} type="button"><SupplierIcon name="trash"/>Excluir fornecedor</button>
+                  {!readOnly && <button className="supplier-danger-zone-trigger" onClick={() => { setDeleteVerification(""); setDeleteOpen(true); }} type="button"><SupplierIcon name="trash"/>Excluir fornecedor</button>}
                 </div>
               )}
 
               {supplierTab === "materials" && (
                 <section className="supplier-materials-tab">
-                  <header><div><span>Portfólio do fornecedor</span><h3>Matérias-primas fornecidas</h3></div><button className="supplier-material-add" onClick={() => setMaterialLinkOpen(true)} type="button"><SupplierIcon name="plus"/>Vincular matéria-prima</button></header>
+                  <header><div><span>Portfólio do fornecedor</span><h3>Matérias-primas fornecidas</h3></div>{!readOnly && <button className="supplier-material-add" onClick={() => setMaterialLinkOpen(true)} type="button"><SupplierIcon name="plus"/>Vincular matéria-prima</button>}</header>
                   <div className="supplier-material-list compact">
                     {selectedLinks.map((link) => { const material = materialById.get(link.raw_material_id); const uses = structureUseCountByCode.get(material?.code) ?? 0; const category = categoryByMaterialCode.get(material?.code) || "Matéria-prima"; return (
                       <article key={link.raw_material_id} style={categoryVisual(category)}>
@@ -549,9 +560,9 @@ export default function SupplierDashboard() {
       <FormModal description={`${selectedMaterial?.code || "Item"} · ${selectedMaterial?.name || "Matéria-prima"}`} eyebrow="Condições comerciais" onClose={() => setCommercialLink(null)} open={Boolean(commercialLink)} size="large" title="Negociação com o fornecedor">
         {commercialLink && <form className="supplier-commercial-modal" onSubmit={saveMaterial}>
           <section className="supplier-commercial-summary"><span><SupplierIcon name="money"/></span><div><strong>{formatMoney(commercialDraft.last_price, commercialDraft.currency)}</strong><small>Preço atual informado</small></div><div><strong>{structures.filter((structure) => structure.material_code === selectedMaterial?.code).length}</strong><small>estruturas utilizam este item</small></div></section>
-          <div className="supplier-commercial-fields"><label>P/N do fornecedor<input value={commercialDraft.supplier_part_number || ""} onChange={(event) => setCommercialDraft({ ...commercialDraft, supplier_part_number: event.target.value })}/></label><label>Último preço<input type="number" min="0" step="0.01" value={commercialDraft.last_price ?? ""} onChange={(event) => setCommercialDraft({ ...commercialDraft, last_price: event.target.value })}/></label><label>Moeda<select value={commercialDraft.currency || "BRL"} onChange={(event) => setCommercialDraft({ ...commercialDraft, currency: event.target.value })}><option>BRL</option><option>USD</option></select></label><label>Pedido mínimo<input type="number" min="0" step="0.01" value={commercialDraft.minimum_order ?? ""} onChange={(event) => setCommercialDraft({ ...commercialDraft, minimum_order: event.target.value })}/></label></div>
-          <section className="supplier-material-attachments"><label><SupplierIcon name="file"/>Adicionar anexo<input type="file" onChange={(event) => { uploadMaterialAttachment(commercialLink, event.target.files?.[0]); event.target.value = ""; }}/></label><div>{selectedMaterialAttachments.map((item) => <span key={item.id}><a href={item.public_url} target="_blank" rel="noreferrer">{item.name}</a><button aria-label={`Excluir ${item.name}`} onClick={() => removeMaterialAttachment(item)} type="button">×</button></span>)}{!selectedMaterialAttachments.length && <small>Nenhum anexo comercial</small>}</div></section>
-          <footer className="supplier-commercial-actions"><button className="danger" onClick={() => removeMaterial(commercialLink.raw_material_id)} type="button">Remover vínculo</button><span/><button onClick={() => setCommercialLink(null)} type="button">Cancelar</button><button type="submit">Salvar condições</button></footer>
+          <fieldset className="supplier-commercial-fields" disabled={readOnly}><label>P/N do fornecedor<input value={commercialDraft.supplier_part_number || ""} onChange={(event) => setCommercialDraft({ ...commercialDraft, supplier_part_number: event.target.value })}/></label><label>Último preço<input type="number" min="0" step="0.01" value={commercialDraft.last_price ?? ""} onChange={(event) => setCommercialDraft({ ...commercialDraft, last_price: event.target.value })}/></label><label>Moeda<select value={commercialDraft.currency || "BRL"} onChange={(event) => setCommercialDraft({ ...commercialDraft, currency: event.target.value })}><option>BRL</option><option>USD</option></select></label><label>Pedido mínimo<input type="number" min="0" step="0.01" value={commercialDraft.minimum_order ?? ""} onChange={(event) => setCommercialDraft({ ...commercialDraft, minimum_order: event.target.value })}/></label></fieldset>
+          <section className="supplier-material-attachments">{!readOnly && <label><SupplierIcon name="file"/>Adicionar anexo<input type="file" onChange={(event) => { uploadMaterialAttachment(commercialLink, event.target.files?.[0]); event.target.value = ""; }}/></label>}<div>{selectedMaterialAttachments.map((item) => <span key={item.id}><a href={item.public_url} target="_blank" rel="noreferrer">{item.name}</a>{!readOnly && <button aria-label={`Excluir ${item.name}`} onClick={() => removeMaterialAttachment(item)} type="button">×</button>}</span>)}{!selectedMaterialAttachments.length && <small>Nenhum anexo comercial</small>}</div></section>
+          <footer className="supplier-commercial-actions">{!readOnly && <button className="danger" onClick={() => removeMaterial(commercialLink.raw_material_id)} type="button">Remover vínculo</button>}<span/><button onClick={() => setCommercialLink(null)} type="button">Fechar</button>{!readOnly && <button type="submit">Salvar condições</button>}</footer>
         </form>}
       </FormModal>
 

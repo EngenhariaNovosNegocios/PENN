@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { cloneElement, isValidElement, useEffect, useMemo, useState } from "react";
 import OverviewDashboard from "@/components/OverviewDashboard";
 import NewProductsDashboard from "@/components/NewProductsDashboard";
 import IssuesDashboard from "@/components/IssuesDashboard";
@@ -10,6 +10,11 @@ import ManagerActivityDashboard from "@/components/ManagerActivityDashboard";
 import AccessManagementDashboard from "@/components/AccessManagementDashboard";
 import ConnectedUserOverlay from "@/components/ConnectedUserOverlay";
 import { isAssignedTo } from "@/lib/assignee";
+import {
+  canAccessPortalPage,
+  canCreateDemand,
+  canEditOperations,
+} from "@/lib/accessControl";
 import { getCurrentStageTasks } from "@/lib/developmentWorkflow";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -25,20 +30,6 @@ const pageTitles = {
   reports: "Relatórios",
   profile: "Minhas tarefas",
 };
-
-const roleLevels = {
-  colaborador: 1,
-  gerente: 2,
-  admin: 3,
-};
-
-function hasMinimumRole(currentRole, minimumRole) {
-  if (!minimumRole) {
-    return true;
-  }
-
-  return (roleLevels[currentRole] ?? 0) >= (roleLevels[minimumRole] ?? 0);
-}
 
 function getInitials(nameOrEmail) {
   const value = nameOrEmail || "Usuário";
@@ -182,8 +173,8 @@ const navigation = [
   { id: "products", label: "Produtos", icon: "box" },
   { id: "new-products", label: "Novos produtos", icon: "spark" },
   { id: "issues", label: "Pendências", icon: "alert" },
-  { id: "manager", label: "Gerência", icon: "manager", minimumRole: "gerente" },
-  { id: "access", label: "Acessos", icon: "users", minimumRole: "admin" },
+  { id: "manager", label: "Gerência", icon: "manager" },
+  { id: "access", label: "Acessos", icon: "users" },
   { id: "intelligence", label: "Inteligência NPI", icon: "brain", disabled: true },
   { id: "indicators", label: "Indicadores", icon: "chart", disabled: true },
   { id: "reports", label: "Relatórios", icon: "file", disabled: true },
@@ -197,7 +188,7 @@ function canAccessPage(role, pageId) {
   }
 
   const page = navigation.find((item) => item.id === pageId);
-  return Boolean(page) && !page.disabled && hasMinimumRole(role, page.minimumRole);
+  return Boolean(page) && !page.disabled && canAccessPortalPage(role, pageId);
 }
 
 export default function AppShell({ children }) {
@@ -216,11 +207,15 @@ export default function AppShell({ children }) {
 
   const visibleNavigation = useMemo(
     () =>
-      navigation.filter((item) =>
-        hasMinimumRole(accessRole, item.minimumRole)
-      ),
+      navigation.filter((item) => canAccessPortalPage(accessRole, item.id)),
     [accessRole]
   );
+
+  const readOnly = !canEditOperations(accessRole);
+  const demandCreationAllowed = canCreateDemand(accessRole);
+  const productWorkspace = isValidElement(children)
+    ? cloneElement(children, { accessRole, readOnly })
+    : children;
 
   useEffect(() => {
     async function loadNotifications() {
@@ -579,16 +574,23 @@ export default function AppShell({ children }) {
             />
           </section>
           <section className="app-page" hidden={activePage !== "products"}>
-            {children}
+            {productWorkspace}
           </section>
           <section className="app-page" hidden={activePage !== "new-products"}>
-            <NewProductsDashboard />
+            <NewProductsDashboard
+              canCreateDemand={demandCreationAllowed}
+              readOnly={readOnly}
+            />
           </section>
           <section className="app-page" hidden={activePage !== "intelligence"}>
             <StrategicIntelligenceDashboard onOpenProduct={openProduct} />
           </section>
           <section className="app-page" hidden={activePage !== "issues"}>
-            <IssuesDashboard onOpenProduct={openProduct} />
+            <IssuesDashboard
+              canCreateDemand={demandCreationAllowed}
+              onOpenProduct={openProduct}
+              readOnly={readOnly}
+            />
           </section>
           {canAccessPage(accessRole, "manager") && (
             <section className="app-page" hidden={activePage !== "manager"}>
@@ -605,8 +607,10 @@ export default function AppShell({ children }) {
           )}
           <section className="app-page" hidden={activePage !== "profile"}>
             <UserProfileDashboard
+              canCreateDemand={demandCreationAllowed}
               onOpenDevelopmentTask={openDevelopmentTask}
               onOpenIssue={openAssignedIssue}
+              readOnly={readOnly}
             />
           </section>
         </div>

@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabaseClient";
 
 const roleLabels = {
   colaborador: "Colaborador",
+  engenharia: "Engenharia",
   gerente: "Gerente",
   admin: "Administrador",
 };
