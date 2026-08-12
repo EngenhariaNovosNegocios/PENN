@@ -9,9 +9,13 @@ import {
   WORKFLOW_STAGES as workflowStages,
 } from "@/lib/developmentWorkflow";
 
-const emptyProject = { productCode: "", requester: "", owner: "", targetLaunchDate: "", targetPrice: "", expectedDemand: "", potentialClients: "", marketPotential: "", technicalSpecs: "", developmentReason: "" };
+const emptyProject = { productName: "", requester: "", owner: "", targetLaunchDate: "", targetPrice: "", expectedDemand: "", potentialClients: "", marketPotential: "", technicalSpecs: "", developmentReason: "" };
 const emptyPackage = { name: "", supplier: "", currency: "BRL", dueDate: "" };
 const emptyPackageItem = { partNumber: "", sapCode: "", description: "", quantity: "", unitType: "", unitPrice: "", overhead: "", currency:"", exchangeRate:"", ncm:"", applyIpi:false, applyPis:false, applyCofins:false, applyIcms:false, applyImportTax:false };
+
+function productCodeLabel(product) {
+  return product?.code || "Código a definir";
+}
 
 function FlowIcon({ name }) {
   const paths = { spark: <path d="m12 3 1.4 4.6L18 9l-4.6 1.4L12 15l-1.4-4.6L6 9l4.6-1.4Z"/>, arrow: <path d="m9 18 6-6-6-6"/>, check: <path d="m5 12 4 4L19 6"/>, clock: <><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></>, chevron: <path d="m6 9 6 6 6-6"/>, lock: <><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></>, back: <path d="m15 18-6-6 6-6"/> };
@@ -37,7 +41,7 @@ function QuotationWorkspace({project,packages,items,selectedPackageId,setSelecte
   const format=(value,currency)=>Number(value).toLocaleString(currency==="USD"?"en-US":"pt-BR",{style:"currency",currency});
   return <section className="quotation-workspace">
     <header><div><span className="panel-kicker">Composições complexas</span><h2>Pacotes de cotação</h2><p>Organize conjuntos, compare propostas e escolha quais entram no total consolidado.</p></div><button onClick={()=>setShowForm(!showForm)}>+ Novo pacote</button></header>
-    <FormModal description={`O pacote será adicionado ao projeto ${project.product?.code || "selecionado"} e poderá receber componentes e impostos.`} eyebrow="Nova composição" onClose={()=>setShowForm(false)} open={showForm} title="Criar pacote de cotação">
+    <FormModal description={`O pacote será adicionado ao projeto ${productCodeLabel(project.product)} e poderá receber componentes e impostos.`} eyebrow="Nova composição" onClose={()=>setShowForm(false)} open={showForm} title="Criar pacote de cotação">
       <form className="modal-form" onSubmit={createPackage}>
         <label className="wide">Nome do pacote<input autoFocus required value={packageForm.name} onChange={e=>setPackageForm({...packageForm,name:e.target.value})} placeholder="Ex.: Kit de instalação"/></label>
         <label>Fornecedor<input value={packageForm.supplier} onChange={e=>setPackageForm({...packageForm,supplier:e.target.value})} placeholder="Opcional"/></label>
@@ -101,6 +105,9 @@ export default function NewProductsDashboard() {
   const [projectEdit, setProjectEdit] = useState({});
   const [workspaceView, setWorkspaceView] = useState("portfolio");
   const [userProfiles,setUserProfiles]=useState([]);
+  const [productCodeOpen, setProductCodeOpen] = useState(false);
+  const [productCodeDraft, setProductCodeDraft] = useState("");
+  const [savingProductCode, setSavingProductCode] = useState(false);
 
   async function loadWorkflow() {
     const [productsResult, projectsResult, tasksResult, attachmentsResult, historyResult, packagesResult, quotationItemsResult, projectHistoryResult, profilesResult] = await Promise.all([
@@ -207,15 +214,94 @@ export default function NewProductsDashboard() {
   ]);
 
   async function createProject(event) {
-    event.preventDefault(); const product = products.find((item) => item.code.toLowerCase() === form.productCode.trim().toLowerCase());
-    if (!product) { setMessage("Selecione um código de produto válido."); return; }
-    if (projects.some((project) => project.product_id === product.id)) { setMessage("Este produto já possui um fluxo de desenvolvimento."); return; }
-    setSaving(true); setMessage("");
-    const { data, error } = await supabase.from("product_development_projects").insert({ product_id: product.id, requester: form.requester.trim(), owner: form.owner.trim(), target_launch_date: form.targetLaunchDate || null, target_price: form.targetPrice ? Number(form.targetPrice) : null, expected_demand: form.expectedDemand.trim(), potential_clients: form.potentialClients.trim(), market_potential: form.marketPotential.trim(), technical_specs: form.technicalSpecs.trim(), development_reason: form.developmentReason.trim() }).select("*").single();
-    if (error) { setMessage(`Não foi possível criar o fluxo: ${error.message}`); setSaving(false); return; }
-    let order = 0; const templateTasks = workflowStages.flatMap((stage) => stage.tasks.map((title) => ({ project_id: data.id, stage_key: stage.key, title, owner_area: stage.area, sort_order: order++ })));
-    const { data: createdTasks, error: taskError } = await supabase.from("product_development_tasks").insert(templateTasks).select("*");
-    if (taskError) { setMessage(`Fluxo criado, mas as tarefas falharam: ${taskError.message}`); } else { setProjects((current) => [data, ...current]); setTasks((current) => [...current, ...(createdTasks ?? [])]); setForm(emptyProject); setShowForm(false); setSelectedProjectId(data.id); setMessage("Fluxo criado com sucesso."); }
+    event.preventDefault();
+    const productName = form.productName.trim();
+
+    if (!productName) {
+      setMessage("Informe o nome provisório do produto.");
+      return;
+    }
+
+    setSaving(true);
+    setMessage("");
+
+    const { data: product, error: productError } = await supabase
+      .from("products")
+      .insert({
+        name: productName,
+        code: null,
+        category: "Em desenvolvimento",
+        product_icon: "box",
+        owner: form.owner.trim(),
+        status: "avaliacao",
+        characteristics: form.technicalSpecs.trim(),
+      })
+      .select("id, code, name, category, owner")
+      .single();
+
+    if (productError) {
+      const migrationHint = productError.message?.toLowerCase().includes("code")
+        ? " Execute novamente o SQL atualizado para permitir produtos ainda sem código."
+        : "";
+      setMessage(`Não foi possível iniciar o cadastro do produto: ${productError.message}.${migrationHint}`);
+      setSaving(false);
+      return;
+    }
+
+    const { data: project, error } = await supabase
+      .from("product_development_projects")
+      .insert({
+        product_id: product.id,
+        requester: form.requester.trim(),
+        owner: form.owner.trim(),
+        target_launch_date: form.targetLaunchDate || null,
+        target_price: form.targetPrice ? Number(form.targetPrice) : null,
+        expected_demand: form.expectedDemand.trim(),
+        potential_clients: form.potentialClients.trim(),
+        market_potential: form.marketPotential.trim(),
+        technical_specs: form.technicalSpecs.trim(),
+        development_reason: form.developmentReason.trim(),
+      })
+      .select("*")
+      .single();
+
+    if (error) {
+      await supabase.from("products").delete().eq("id", product.id);
+      setMessage(`Não foi possível criar o fluxo: ${error.message}`);
+      setSaving(false);
+      return;
+    }
+
+    let order = 0;
+    const templateTasks = workflowStages.flatMap((stage) =>
+      stage.tasks.map((title) => ({
+        project_id: project.id,
+        stage_key: stage.key,
+        title,
+        owner_area: stage.area,
+        sort_order: order++,
+      }))
+    );
+    const { data: createdTasks, error: taskError } = await supabase
+      .from("product_development_tasks")
+      .insert(templateTasks)
+      .select("*");
+
+    if (taskError) {
+      await supabase.from("product_development_projects").delete().eq("id", project.id);
+      await supabase.from("products").delete().eq("id", product.id);
+      setMessage(`Não foi possível montar as etapas do desenvolvimento: ${taskError.message}`);
+      setSaving(false);
+      return;
+    }
+
+    setProducts((current) => [product, ...current]);
+    setProjects((current) => [project, ...current]);
+    setTasks((current) => [...current, ...(createdTasks ?? [])]);
+    setForm(emptyProject);
+    setShowForm(false);
+    setSelectedProjectId(project.id);
+    setMessage("Desenvolvimento criado. O código será definido na etapa 7.");
     setSaving(false);
   }
 
@@ -224,6 +310,91 @@ export default function NewProductsDashboard() {
     const { error } = await supabase.from("product_development_tasks").update({ status, completed_at: completedAt }).eq("id", task.id);
     if (error) { setMessage(`Não foi possível atualizar: ${error.message}`); return; }
     setTasks((current) => current.map((item) => item.id === task.id ? { ...item, status, completed_at: completedAt } : item));
+    window.dispatchEvent(new CustomEvent("penn:tasks-changed"));
+  }
+
+  async function assignProductCode(event) {
+    event.preventDefault();
+    const code = productCodeDraft.trim().toUpperCase();
+
+    if (!selectedProject?.product || !code) {
+      return;
+    }
+
+    if (products.some((product) =>
+      product.id !== selectedProject.product.id &&
+      product.code?.toLowerCase() === code.toLowerCase()
+    )) {
+      setMessage("Este código já está vinculado a outro produto.");
+      return;
+    }
+
+    setSavingProductCode(true);
+    const oldCode = selectedProject.product.code || null;
+    const { data: updatedProduct, error } = await supabase
+      .from("products")
+      .update({ code })
+      .eq("id", selectedProject.product.id)
+      .select("id, code, name, category, owner")
+      .single();
+
+    if (error) {
+      setMessage(`Não foi possível atribuir o código: ${error.message}`);
+      setSavingProductCode(false);
+      return;
+    }
+
+    setProducts((current) => current.map((product) =>
+      product.id === updatedProduct.id ? { ...product, ...updatedProduct } : product
+    ));
+    await supabase
+      .from("product_issues")
+      .update({ product_code: code })
+      .eq("product_id", updatedProduct.id);
+
+    const codeTask = selectedProject.projectTasks.find((task) =>
+      task.stage_key === "industrialization" &&
+      task.title === "Definir sequência de código interno"
+    );
+    let taskWarning = "";
+
+    if (codeTask && codeTask.status !== "completed") {
+      const completedAt = new Date().toISOString();
+      const { error: taskError } = await supabase
+        .from("product_development_tasks")
+        .update({ status: "completed", completed_at: completedAt })
+        .eq("id", codeTask.id);
+
+      if (taskError) {
+        taskWarning = " O código foi salvo, mas a tarefa deverá ser concluída manualmente.";
+      } else {
+        setTasks((current) => current.map((task) =>
+          task.id === codeTask.id
+            ? { ...task, status: "completed", completed_at: completedAt }
+            : task
+        ));
+      }
+    }
+
+    const { data: history } = await supabase
+      .from("product_development_project_history")
+      .insert({
+        project_id: selectedProject.id,
+        field_name: "product_code",
+        old_value: oldCode,
+        new_value: code,
+      })
+      .select("*")
+      .single();
+
+    if (history) {
+      setProjectHistory((current) => [history, ...current]);
+    }
+
+    setProductCodeOpen(false);
+    setProductCodeDraft("");
+    setSavingProductCode(false);
+    setMessage(`Código ${code} atribuído ao produto.${taskWarning}`);
     window.dispatchEvent(new CustomEvent("penn:tasks-changed"));
   }
 
@@ -288,12 +459,17 @@ export default function NewProductsDashboard() {
   }
 
   async function deleteProject() {
-    if (!deleteCandidate || deleteConfirmation.trim() !== deleteCandidate.product?.code) return;
+    const confirmationToken = deleteCandidate?.product?.code || deleteCandidate?.product?.name;
+    if (!deleteCandidate || deleteConfirmation.trim() !== confirmationToken) return;
     const projectTaskIds = new Set(tasks.filter((task)=>task.project_id===deleteCandidate.id).map((task)=>task.id));
     const storedFiles = taskAttachments.filter((attachment)=>projectTaskIds.has(attachment.task_id)).map((attachment)=>attachment.storage_path);
     if (storedFiles.length) await supabase.storage.from("product-files").remove(storedFiles);
     const { error } = await supabase.from("product_development_projects").delete().eq("id",deleteCandidate.id);
     if (error) { setMessage(`Não foi possível excluir: ${error.message}`); return; }
+    if (!deleteCandidate.product?.code && deleteCandidate.product_id) {
+      await supabase.from("products").delete().eq("id", deleteCandidate.product_id);
+      setProducts((current) => current.filter((product) => product.id !== deleteCandidate.product_id));
+    }
     setProjects((current)=>current.filter((project)=>project.id!==deleteCandidate.id));
     setTasks((current)=>current.filter((task)=>task.project_id!==deleteCandidate.id));
     setDeleteCandidate(null); setDeleteConfirmation(""); setMessage("Projeto excluído definitivamente.");
@@ -314,20 +490,22 @@ export default function NewProductsDashboard() {
 
   function openProject(projectId) {
     setHighlightedTaskId(null);
+    setProductCodeOpen(false);
+    setProductCodeDraft("");
     setSelectedProjectId(projectId);
   }
 
   if (workspaceView === "quotations") return (
     <main className="flow-page quotation-dedicated-page">
       <button className="flow-back" onClick={() => { setWorkspaceView("portfolio"); setSelectedProjectId(null); }}><FlowIcon name="back"/> Voltar aos novos produtos</button>
-      <section className="quotation-page-hero"><div><span className="panel-kicker">Central de custos</span><h1>Pacotes de cotação</h1><p>Monte composições, compare custos EXW, FOB e NET e consolide somente os pacotes selecionados.</p></div><label>Projeto em desenvolvimento<select value={selectedProjectId || ""} onChange={(event) => { setSelectedProjectId(Number(event.target.value)); setSelectedPackageId(null); cancelEditQuotationItem(); }}><option value="" disabled>Selecione um projeto</option>{activeProjects.map((project) => <option key={project.id} value={project.id}>{project.product?.code} · {project.product?.name}</option>)}</select></label></section>
+      <section className="quotation-page-hero"><div><span className="panel-kicker">Central de custos</span><h1>Pacotes de cotação</h1><p>Monte composições, compare custos EXW, FOB e NET e consolide somente os pacotes selecionados.</p></div><label>Projeto em desenvolvimento<select value={selectedProjectId || ""} onChange={(event) => { setSelectedProjectId(Number(event.target.value)); setSelectedPackageId(null); cancelEditQuotationItem(); }}><option value="" disabled>Selecione um projeto</option>{activeProjects.map((project) => <option key={project.id} value={project.id}>{productCodeLabel(project.product)} · {project.product?.name}</option>)}</select></label></section>
       {selectedProject ? <QuotationWorkspace project={selectedProject} packages={quotationPackages} items={quotationItems} selectedPackageId={selectedPackageId} setSelectedPackageId={setSelectedPackageId} showForm={showPackageForm} setShowForm={setShowPackageForm} packageForm={packageForm} setPackageForm={setPackageForm} itemForm={packageItemForm} setItemForm={setPackageItemForm} createPackage={createQuotationPackage} saveItem={saveQuotationItem} updateStatus={updatePackageStatus} editingItemId={editingQuotationItemId} startEditItem={startEditQuotationItem} cancelEditItem={cancelEditQuotationItem} deleteItem={deleteQuotationItem} deletePackage={deleteQuotationPackage} clonePackage={cloneQuotationPackage} togglePackageTotal={toggleQuotationPackageTotal} /> : <section className="quotation-page-empty"><strong>Nenhum projeto disponível</strong><span>Inicie um novo desenvolvimento para criar seus pacotes de cotação.</span></section>}
     </main>
   );
 
   if (selectedProject) return (
     <main className="flow-page"><button className="flow-back" onClick={() => openProject(null)}><FlowIcon name="back"/> Voltar aos projetos</button>
-      <section className="flow-detail-hero"><div><span>{selectedProject.product?.code}</span><h1>{selectedProject.product?.name}</h1><p>{selectedProject.development_reason || "Fluxo estruturado de desenvolvimento e lançamento."}</p><div className="flow-detail-actions"><button onClick={beginProjectEdit}>Editar dados do projeto</button><button className="archive-project-button" onClick={archiveProject}>Arquivar projeto</button></div></div><div className="flow-detail-score"><strong>{selectedProject.progress}%</strong><span>concluído</span></div></section>
+      <section className="flow-detail-hero"><div><span>{productCodeLabel(selectedProject.product)}</span><h1>{selectedProject.product?.name}</h1><p>{selectedProject.development_reason || "Fluxo estruturado de desenvolvimento e lançamento."}</p><div className="flow-detail-actions"><button onClick={beginProjectEdit}>Editar dados do projeto</button><button className="archive-project-button" onClick={archiveProject}>Arquivar projeto</button></div></div><div className="flow-detail-score"><strong>{selectedProject.progress}%</strong><span>concluído</span></div></section>
       <section className="flow-project-info"><div><span>Solicitante</span><strong>{selectedProject.requester || "Não definido"}</strong></div><div><span>Responsável</span><strong>{selectedProject.owner || "Não definido"}</strong></div><div className="launch-date-editor"><span>Lançamento previsto</span><input type="date" value={selectedProject.target_launch_date || ""} onChange={(event)=>changeLaunchDate(event.target.value)} /><small>{launchHistory.filter((item)=>item.project_id===selectedProject.id).length} alterações registradas</small></div><div><span>Preço objetivo</span><strong>{selectedProject.target_price ? Number(selectedProject.target_price).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "Não definido"}</strong></div></section>
       {editingProject&&<section className="project-edit-panel"><header><div><span className="panel-kicker">Edição auditável</span><h2>Dados iniciais do desenvolvimento</h2></div><button onClick={()=>setEditingProject(false)}>Fechar</button></header><form onSubmit={saveProjectEdit}><label>Solicitante<input value={projectEdit.requester} onChange={e=>setProjectEdit({...projectEdit,requester:e.target.value})}/></label><label>Responsável<input value={projectEdit.owner} onChange={e=>setProjectEdit({...projectEdit,owner:e.target.value})}/></label><label>Lançamento previsto<input type="date" value={projectEdit.target_launch_date} onChange={e=>setProjectEdit({...projectEdit,target_launch_date:e.target.value})}/></label><label>Preço objetivo<input type="number" step=".01" value={projectEdit.target_price} onChange={e=>setProjectEdit({...projectEdit,target_price:e.target.value})}/></label>{[["expected_demand","Demanda esperada"],["potential_clients","Clientes potenciais"],["market_potential","Mercado potencial"],["technical_specs","Especificações técnicas"],["development_reason","Motivo e diferencial"]].map(([field,label])=><label className="wide" key={field}>{label}<textarea rows="2" value={projectEdit[field]} onChange={e=>setProjectEdit({...projectEdit,[field]:e.target.value})}/></label>)}<footer><small>{projectHistory.filter(item=>item.project_id===selectedProject.id).length} alterações registradas</small><button>Salvar alterações</button></footer></form></section>}
       {launchHistory.some((item)=>item.project_id===selectedProject.id)&&<details className="launch-history"><summary>Histórico da previsão de lançamento</summary>{launchHistory.filter((item)=>item.project_id===selectedProject.id).map((item)=><div key={item.id}><strong>{item.old_date||"Sem data"} → {item.new_date||"Sem data"}</strong><span>{item.reason}</span><small>{new Date(item.changed_at).toLocaleString("pt-BR")}</small></div>)}</details>}
@@ -385,6 +563,29 @@ export default function NewProductsDashboard() {
                 </div>
                 <FlowIcon name="chevron" />
               </button>
+
+              {open && stage.key === "industrialization" && (
+                <div className={`stage-product-code ${selectedProject.product?.code ? "assigned" : "pending"}`}>
+                  <div>
+                    <span>Código definitivo do produto</span>
+                    <strong>{productCodeLabel(selectedProject.product)}</strong>
+                    <small>
+                      {selectedProject.product?.code
+                        ? "O produto já está disponível na aplicação com este código."
+                        : "Defina o código nesta etapa para publicar o item no catálogo de produtos."}
+                    </small>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setProductCodeDraft(selectedProject.product?.code || "");
+                      setProductCodeOpen(true);
+                    }}
+                    type="button"
+                  >
+                    {selectedProject.product?.code ? "Revisar código" : "Definir código"}
+                  </button>
+                </div>
+              )}
 
               {open && (
                 <div className="flow-task-list">
@@ -509,6 +710,39 @@ export default function NewProductsDashboard() {
           );
         })}
       </section>
+      <FormModal
+        description="Informe o código definitivo reservado para este produto. O sistema validará duplicidades antes de publicar o item no catálogo."
+        eyebrow="Etapa 7 · Codificação"
+        onClose={() => {
+          setProductCodeOpen(false);
+          setProductCodeDraft("");
+        }}
+        open={productCodeOpen}
+        title="Atribuir código ao produto"
+      >
+        <form className="modal-form" onSubmit={assignProductCode}>
+          <label className="wide">
+            Código definitivo
+            <input
+              autoFocus
+              onChange={(event) => setProductCodeDraft(event.target.value)}
+              placeholder="Ex.: 550.100.000.5000"
+              required
+              value={productCodeDraft}
+            />
+          </label>
+          <div className="code-assignment-product wide">
+            <span>Produto</span>
+            <strong>{selectedProject.product?.name}</strong>
+          </div>
+          <footer className="modal-form-actions">
+            <button onClick={() => setProductCodeOpen(false)} type="button">Cancelar</button>
+            <button disabled={savingProductCode} type="submit">
+              {savingProductCode ? "Salvando..." : "Atribuir código"}
+            </button>
+          </footer>
+        </form>
+      </FormModal>
     </main>
   );
 
@@ -516,9 +750,9 @@ export default function NewProductsDashboard() {
     <main className="flow-page"><section className={`flow-hero ${showArchived?"archived-hero":""}`}><div><span><FlowIcon name="spark"/> {showArchived?"Arquivo de projetos":"Processo PENN"}</span><h1>{showArchived?"Projetos arquivados":"Desenvolvimento de novos produtos"}</h1><p>{showArchived?"Consulte projetos retirados do portfólio ativo, restaure-os ou faça uma exclusão definitiva e confirmada.":"Da oportunidade ao pós-lançamento: um fluxo único, rastreável e orientado a decisões."}</p><div>{!showArchived&&<button onClick={() => setShowForm(true)}>Iniciar novo desenvolvimento</button>}<button className="secondary" onClick={()=>setShowArchived(!showArchived)}>{showArchived?"Voltar aos projetos ativos":`Projetos arquivados (${archivedProjects.length})`} <FlowIcon name="arrow"/></button></div></div>{showArchived?<div className="flow-archive-count"><strong>{archivedProjects.length}</strong><span>projetos preservados</span></div>:<div className="flow-portfolio-chart"><div className="flow-task-pie" style={{background:`conic-gradient(#55d6a0 0 ${completedSlice}%,#56a8e8 ${completedSlice}% ${progressingSlice}%,#e26a5d ${progressingSlice}% ${blockedSlice}%,rgba(255,255,255,.18) ${blockedSlice}% 100%)`}}><span><strong>{activeTasks.length}</strong><small>tarefas</small></span></div><div><strong>Ritmo do portfólio</strong><span><i className="done"/>{completedTasks} concluídas</span><span><i className="doing"/>{progressingTasks} em andamento</span><span><i className="blocked"/>{blockedTasks} bloqueadas</span></div></div>}</section>
       {!showArchived&&<section className="flow-summary"><article><span>Projetos ativos</span><strong>{activeProjects.length}</strong></article><article><span>Em andamento</span><strong>{progressingTasks}</strong></article><article><span>Tarefas concluídas</span><strong>{completedTasks}</strong></article><article className="blocked"><span>Bloqueios</span><strong>{blockedTasks}</strong></article></section>}
       {message && <p className="flow-message">{message}</p>}
-      <FormModal description="O projeto será criado com o checklist completo do processo PENN e começará pela etapa de levantamento." eyebrow="Novo fluxo" onClose={() => setShowForm(false)} open={showForm} size="large" title="Iniciar desenvolvimento">
+      <FormModal description="O projeto será criado sem código e começará pela etapa de levantamento. O código definitivo será atribuído somente na etapa 7." eyebrow="Novo fluxo" onClose={() => setShowForm(false)} open={showForm} size="large" title="Iniciar desenvolvimento">
         <form className="modal-form flow-create-modal" onSubmit={createProject}>
-          <label>Código do produto<input autoFocus list="flow-products" required value={form.productCode} onChange={(e) => setForm({...form,productCode:e.target.value})}/><datalist id="flow-products">{products.map((p)=><option key={p.id} value={p.code}>{p.name}</option>)}</datalist></label>
+          <label className="wide">Nome provisório do produto<input autoFocus required value={form.productName} onChange={(e) => setForm({...form,productName:e.target.value})} placeholder="Ex.: Leitor RFID para controle de acesso"/></label>
           <label>Solicitante<input required value={form.requester} onChange={(e)=>setForm({...form,requester:e.target.value})}/></label>
           <label>Responsável<input required value={form.owner} onChange={(e)=>setForm({...form,owner:e.target.value})}/></label>
           <label>Lançamento previsto<input type="date" value={form.targetLaunchDate} onChange={(e)=>setForm({...form,targetLaunchDate:e.target.value})}/></label>
@@ -531,8 +765,8 @@ export default function NewProductsDashboard() {
           <footer className="modal-form-actions"><button onClick={() => setShowForm(false)} type="button">Cancelar</button><button disabled={saving} type="submit">{saving ? "Criando fluxo..." : "Criar projeto e checklist"}</button></footer>
         </form>
       </FormModal>
-      <section className={`flow-projects ${showArchived?"archived-projects":""}`}><header><div><span className="panel-kicker">{showArchived?"Histórico preservado":"Portfólio em desenvolvimento"}</span><h2>{showArchived?"Arquivo de projetos":"Projetos e evolução"}</h2></div><span>{visibleProjects.length} projetos</span></header><div>{visibleProjects.map((project)=>showArchived?<article className="archived-project-card" key={project.id}><span className="flow-project-code">{project.product?.code?.slice(-2)||"NP"}</span><div><strong>{project.product?.name}</strong><small>{project.product?.code} · Arquivado em {new Date(project.archived_at).toLocaleDateString("pt-BR")}</small></div><span className="archive-card-progress">{project.progress}% concluído</span><div className="archive-card-actions"><button onClick={()=>restoreProject(project)}>Restaurar</button><button className="delete" onClick={()=>{setDeleteCandidate(project);setDeleteConfirmation("")}}>Excluir</button></div></article>:<article className="flow-project-row" key={project.id}><button className="flow-project-card" onClick={()=>openProject(project.id)}><span className="flow-project-code">{project.product?.code?.slice(-2)||"NP"}</span><div><strong>{project.product?.name}</strong><small>{project.product?.code} · {project.owner||"Sem responsável"}</small></div><span className="flow-project-meter"><i><b style={{width:`${project.progress}%`}}/></i><strong>{project.progress}%</strong></span>{project.blocked>0&&<span className="flow-blocked">{project.blocked} bloqueios</span>}<FlowIcon name="arrow"/></button></article>)}{visibleProjects.length===0&&<div className="flow-empty"><FlowIcon name="spark"/><strong>{showArchived?"Nenhum projeto arquivado":"Nenhum desenvolvimento iniciado"}</strong><span>{showArchived?"Os projetos arquivados aparecerão aqui sem poluir o portfólio ativo.":"Crie o primeiro fluxo para transformar a lista antiga em um processo vivo."}</span></div>}</div></section>
-      {deleteCandidate&&<div className="archive-confirm-backdrop"><section className="archive-confirm" role="dialog" aria-modal="true" aria-labelledby="delete-project-title"><span>Exclusão definitiva</span><h2 id="delete-project-title">Excluir {deleteCandidate.product?.name}?</h2><p>Essa ação removerá o projeto, suas etapas, cotações, anexos e histórico relacionado. Ela não poderá ser desfeita.</p><label>Digite <strong>{deleteCandidate.product?.code}</strong> para confirmar<input autoFocus value={deleteConfirmation} onChange={(event)=>setDeleteConfirmation(event.target.value)} placeholder={deleteCandidate.product?.code}/></label><div><button onClick={()=>{setDeleteCandidate(null);setDeleteConfirmation("")}}>Cancelar</button><button className="danger" disabled={deleteConfirmation.trim()!==deleteCandidate.product?.code} onClick={deleteProject}>Excluir definitivamente</button></div></section></div>}
+      <section className={`flow-projects ${showArchived?"archived-projects":""}`}><header><div><span className="panel-kicker">{showArchived?"Histórico preservado":"Portfólio em desenvolvimento"}</span><h2>{showArchived?"Arquivo de projetos":"Projetos e evolução"}</h2></div><span>{visibleProjects.length} projetos</span></header><div>{visibleProjects.map((project)=>showArchived?<article className="archived-project-card" key={project.id}><span className="flow-project-code">{project.product?.code?.slice(-2)||"NP"}</span><div><strong>{project.product?.name}</strong><small>{productCodeLabel(project.product)} · Arquivado em {new Date(project.archived_at).toLocaleDateString("pt-BR")}</small></div><span className="archive-card-progress">{project.progress}% concluído</span><div className="archive-card-actions"><button onClick={()=>restoreProject(project)}>Restaurar</button><button className="delete" onClick={()=>{setDeleteCandidate(project);setDeleteConfirmation("")}}>Excluir</button></div></article>:<article className="flow-project-row" key={project.id}><button className="flow-project-card" onClick={()=>openProject(project.id)}><span className="flow-project-code">{project.product?.code?.slice(-2)||"NP"}</span><div><strong>{project.product?.name}</strong><small>{productCodeLabel(project.product)} · {project.owner||"Sem responsável"}</small></div><span className="flow-project-meter"><i><b style={{width:`${project.progress}%`}}/></i><strong>{project.progress}%</strong></span>{project.blocked>0&&<span className="flow-blocked">{project.blocked} bloqueios</span>}<FlowIcon name="arrow"/></button></article>)}{visibleProjects.length===0&&<div className="flow-empty"><FlowIcon name="spark"/><strong>{showArchived?"Nenhum projeto arquivado":"Nenhum desenvolvimento iniciado"}</strong><span>{showArchived?"Os projetos arquivados aparecerão aqui sem poluir o portfólio ativo.":"Crie o primeiro fluxo para transformar a lista antiga em um processo vivo."}</span></div>}</div></section>
+      {deleteCandidate&&<div className="archive-confirm-backdrop"><section className="archive-confirm" role="dialog" aria-modal="true" aria-labelledby="delete-project-title"><span>Exclusão definitiva</span><h2 id="delete-project-title">Excluir {deleteCandidate.product?.name}?</h2><p>Essa ação removerá o projeto, suas etapas, cotações, anexos e histórico relacionado. Ela não poderá ser desfeita.</p><label>Digite <strong>{deleteCandidate.product?.code || deleteCandidate.product?.name}</strong> para confirmar<input autoFocus value={deleteConfirmation} onChange={(event)=>setDeleteConfirmation(event.target.value)} placeholder={deleteCandidate.product?.code || deleteCandidate.product?.name}/></label><div><button onClick={()=>{setDeleteCandidate(null);setDeleteConfirmation("")}}>Cancelar</button><button className="danger" disabled={deleteConfirmation.trim()!==(deleteCandidate.product?.code || deleteCandidate.product?.name)} onClick={deleteProject}>Excluir definitivamente</button></div></section></div>}
     </main>
   );
 }

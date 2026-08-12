@@ -102,6 +102,7 @@ export default function ManagerActivityDashboard({
       supabase
         .from("products")
         .select("id, code, name, status, owner, created_at")
+        .not("code", "is", null)
         .order("created_at", { ascending: false }),
       supabase
         .from("product_issues")
@@ -389,7 +390,7 @@ export default function ManagerActivityDashboard({
                     <strong>{task.title}</strong>
                     <small>
                       {task.product_development_projects?.products?.code ??
-                        "Produto"}{" "}
+                        "Código a definir"}{" "}
                       - {task.assignee_name || task.owner_area || "Sem responsável"}
                     </small>
                   </div>

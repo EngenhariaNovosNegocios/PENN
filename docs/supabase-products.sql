@@ -1,6 +1,11 @@
 alter table public.products
 add column if not exists ncm text;
 
+-- Um desenvolvimento nasce antes da codificacao. O codigo definitivo e atribuido
+-- somente na etapa de Codificacao e industrializacao do fluxo de NPI.
+alter table public.products
+alter column code drop not null;
+
 -- Representação visual escolhida no catálogo; a cor continua derivada da categoria.
 alter table public.products
 add column if not exists product_icon text not null default 'box';

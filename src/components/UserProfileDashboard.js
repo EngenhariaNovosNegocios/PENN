@@ -248,7 +248,7 @@ export default function UserProfileDashboard({
         source: "npi",
         title: task.title,
         description: task.product_development_projects?.products?.name,
-        context: `${task.product_development_projects?.products?.code || "Produto"} · ${
+        context: `${task.product_development_projects?.products?.code || "Código a definir"} · ${
           WORKFLOW_STAGE_NAMES[task.stage_key] || task.stage_key
         }`,
         dueDate: task.due_date,

@@ -524,6 +524,7 @@ export default function ProductManager() {
 
     return products
       .filter((product) =>
+        Boolean(product.code) &&
         (!query || product.code?.toLowerCase().includes(query) || product.name?.toLowerCase().includes(query)) &&
         (!categoryFilter || product.category === categoryFilter)
       )
@@ -1148,7 +1149,7 @@ export default function ProductManager() {
             <span>
               {isLoading
                 ? "Carregando"
-                : `${filteredProducts.length} de ${products.length}`}
+                : `${filteredProducts.length} de ${products.filter((product) => Boolean(product.code)).length}`}
             </span>
             <span className="issue-overview">
               <strong>{issues.length}</strong> pendências abertas

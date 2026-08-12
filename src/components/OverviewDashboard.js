@@ -30,7 +30,7 @@ export default function OverviewDashboard({ onOpenProducts, onOpenIssues }) {
   useEffect(() => {
     async function loadOverview() {
       const today=new Date().toISOString().slice(0,10); const [productsResult, issuesResult, attachmentsResult, structureResult, projectsResult, tasksResult] = await Promise.all([
-        supabase.from("products").select("id, name, code, status, ncm, owner, characteristics, created_at").order("created_at", { ascending: false }),
+        supabase.from("products").select("id, name, code, status, ncm, owner, characteristics, created_at").not("code", "is", null).order("created_at", { ascending: false }),
         supabase.from("product_issues").select("id, product_id, product_code, description, created_at").is("resolved_at", null).order("created_at", { ascending: false }),
         supabase.from("product_attachments").select("id, product_id, kind, file_type"),
         supabase.from("product_structure_items").select("id, product_id"),
@@ -114,7 +114,7 @@ export default function OverviewDashboard({ onOpenProducts, onOpenIssues }) {
 
         <article className="dashboard-panel overdue-tasks-panel">
           <header><div><span className="panel-kicker">Ação imediata</span><h2>Tarefas vencidas da etapa atual</h2></div><span className="overdue-count">{data.overdueTasks.length}</span></header>
-          <div className="overview-task-list">{data.overdueTasks.slice(0,5).map(task=><div key={task.id}><span>!</span><div><strong>{task.title}</strong><small>{task.product_development_projects?.products?.code} · {task.assignee_name||task.owner_area||"Sem responsável"}</small></div><time>{new Date(`${task.due_date}T12:00:00`).toLocaleDateString("pt-BR")}</time></div>)}{!loading&&data.overdueTasks.length===0&&<div className="overview-empty">Nenhuma tarefa vencida.</div>}</div>
+          <div className="overview-task-list">{data.overdueTasks.slice(0,5).map(task=><div key={task.id}><span>!</span><div><strong>{task.title}</strong><small>{task.product_development_projects?.products?.code || "Código a definir"} · {task.assignee_name||task.owner_area||"Sem responsável"}</small></div><time>{new Date(`${task.due_date}T12:00:00`).toLocaleDateString("pt-BR")}</time></div>)}{!loading&&data.overdueTasks.length===0&&<div className="overview-empty">Nenhuma tarefa vencida.</div>}</div>
         </article>
       </section>
     </main>

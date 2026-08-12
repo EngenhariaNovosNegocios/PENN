@@ -4707,23 +4707,24 @@ button.profile-task-open:focus-visible {
 .supplier-contact-readonly dd { overflow: hidden; margin: 0; color: var(--text); font-size: .61rem; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 
 .supplier-material-list.compact {
-  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 10px;
 }
 
 .supplier-material-list.compact > article {
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  grid-template-rows: auto auto;
-  gap: 8px 11px;
-  min-height: 104px;
-  padding: 12px;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 72px;
+  padding: 9px 10px;
   border-color: hsl(var(--category-hue) 38% 75%);
   border-left: 4px solid hsl(var(--category-hue) 55% 42%);
+  border-radius: 10px;
   background: linear-gradient(145deg, #fff, hsl(var(--category-hue) 48% 98%));
 }
 
 .supplier-material-symbol {
-  grid-row: 1 / 3;
   border: 1px solid hsl(var(--category-hue) 48% 80%);
   color: hsl(var(--category-hue) 58% 40%);
   background: hsl(var(--category-hue) 65% 95%);
@@ -4731,10 +4732,35 @@ button.profile-task-open:focus-visible {
 
 .supplier-material-identity { display: grid !important; gap: 3px !important; min-width: 0; }
 .supplier-material-list.compact > article > .supplier-material-identity > strong { color: var(--text); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .7rem; }
-.supplier-material-identity small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.supplier-material-identity small { overflow: hidden; color: var(--muted); font-size: .62rem; text-overflow: ellipsis; white-space: nowrap; }
 .supplier-material-identity em { width: max-content; max-width: 100%; padding: 3px 6px; border-radius: 5px; color: hsl(var(--category-hue) 42% 32%); background: hsl(var(--category-hue) 58% 93%); font-size: .51rem; font-style: normal; font-weight: 800; }
 .supplier-material-list.compact .supplier-material-price { align-self: center; grid-column: 3; grid-row: 1; }
-.supplier-material-list.compact .material-commercial-trigger { align-self: end; grid-column: 2 / 4; grid-row: 2; justify-self: end; min-height: 30px; padding-inline: 8px; }
+.supplier-material-list.compact .material-commercial-trigger { align-self: center; grid-column: 4; grid-row: 1; justify-self: end; min-height: 30px; padding-inline: 8px; }
+
+/* O código definitivo só nasce na etapa 7 do desenvolvimento */
+.stage-product-code {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 15px 10px 67px;
+  padding: 12px 13px;
+  border: 1px solid #c9d8e7;
+  border-radius: 9px;
+  background: linear-gradient(120deg, #f5f9fd, #fff);
+}
+
+.stage-product-code > div { display: grid; gap: 3px; }
+.stage-product-code span { color: var(--muted); font-size: .58rem; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; }
+.stage-product-code strong { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .78rem; }
+.stage-product-code small { color: var(--muted); font-size: .62rem; }
+.stage-product-code.assigned { border-color: #a8d4bc; background: linear-gradient(120deg, #f1faf5, #fff); }
+.stage-product-code.assigned strong { color: #247b55; }
+.stage-product-code button { min-height: 32px; padding: 0 10px; border: 1px solid #a9bfd5; border-radius: 7px; color: var(--primary); background: #fff; font-size: .63rem; font-weight: 800; white-space: nowrap; }
+.stage-product-code.pending button { border-color: transparent; color: #fff; background: var(--primary); }
+.code-assignment-product { display: grid; gap: 4px; padding: 11px 12px; border-radius: 8px; background: var(--panel-soft); }
+.code-assignment-product span { color: var(--muted); font-size: .62rem; }
+.code-assignment-product strong { font-size: .74rem; }
 
 /* Ficha do produto: cabeçalho por família e controles mais leves */
 .form-modal-accent .form-modal-header {
@@ -4765,8 +4791,10 @@ button.profile-task-open:focus-visible {
   .supplier-action-grid,
   .supplier-contact-readonly dl,
   .supplier-material-list.compact { grid-template-columns: 1fr; }
-  .supplier-material-list.compact > article { grid-template-columns: auto minmax(0, 1fr); }
-  .supplier-material-list.compact .supplier-material-price { grid-column: 2; }
-  .supplier-material-list.compact .material-commercial-trigger { grid-column: 2; justify-self: stretch; justify-content: center; }
+  .supplier-material-list.compact > article { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .supplier-material-list.compact .supplier-material-price { display: none; }
+  .supplier-material-list.compact .material-commercial-trigger { grid-column: 3; justify-self: end; }
+  .stage-product-code { align-items: stretch; flex-direction: column; margin-left: 15px; }
+  .stage-product-code button { width: 100%; }
   .product-detail-overlay > .product-edit-panel { padding: 18px; }
 }
