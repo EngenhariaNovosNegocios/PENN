@@ -318,6 +318,18 @@
   color: #648779;
 }
 
+.issueArrow {
+  width: 16px;
+  height: 16px;
+  color: #71859a;
+  transition: color 160ms ease, transform 160ms ease;
+}
+
+.list button:hover .issueArrow {
+  color: var(--primary);
+  transform: translateX(2px);
+}
+
 .list .overdue {
   border-color: #ffc9c0;
   background: var(--danger-bg);
@@ -487,6 +499,7 @@
     grid-column: 2;
   }
 
+  .issueArrow,
   .resolvedArrow {
     grid-column: 3;
     grid-row: 1 / 3;

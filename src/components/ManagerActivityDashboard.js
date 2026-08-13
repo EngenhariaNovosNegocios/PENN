@@ -299,9 +299,11 @@ export default function ManagerActivityDashboard({
             <div className={styles.list}>
               {urgentIssues.slice(0, 8).map((issue) => (
                 <button
+                  aria-label={`Abrir pendências do produto ${issue.product_code}`}
                   className={isOverdue(issue.due_date) ? styles.overdue : ""}
                   key={issue.id}
-                  onClick={onOpenIssues}
+                  onClick={() => onOpenProduct?.(issue.product_id)}
+                  title="Abrir o produto na seção de pendências"
                   type="button"
                 >
                   <span className={`${styles.priority} ${styles[issue.priority || "media"]}`}>
@@ -312,6 +314,7 @@ export default function ManagerActivityDashboard({
                     <small>{issue.description}</small>
                   </div>
                   <time>{formatDate(issue.due_date)}</time>
+                  <ManagerIcon className={styles.issueArrow} name="arrow" />
                 </button>
               ))}
 

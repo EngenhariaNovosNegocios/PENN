@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import FormModal from "@/components/FormModal";
+import IssueAttachmentsModal from "@/components/IssueAttachmentsModal";
 import IssueResolutionModal from "@/components/IssueResolutionModal";
 import { supabase } from "@/lib/supabaseClient";
 import SupplierDashboard from "@/components/SupplierDashboard";
@@ -97,7 +98,7 @@ const structureColumns =
   "id, product_id, material_code, description, quantity, created_at";
 
 const issueColumns =
-  "id, product_id, product_code, description, priority, due_date, resolution_note, resolved_at, created_at";
+  "id, product_id, product_code, description, priority, due_date, resolution_note, resolved_at, created_by, created_at";
 
 const attachmentColumns =
   "id, product_id, name, file_type, kind, storage_path, public_url, created_at";
@@ -144,6 +145,7 @@ function ActionIcon({ name }) {
     download: <><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></>,
     plus: <path d="M12 5v14M5 12h14"/>,
     trash: <><path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6"/></>,
+    attachment: <path d="m20.5 11.5-8.9 8.9a6 6 0 0 1-8.5-8.5l9.6-9.6a4 4 0 0 1 5.7 5.7l-9.6 9.6a2 2 0 0 1-2.8-2.8l8.9-8.9"/>,
   };
   return <svg className="action-icon" aria-hidden="true" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8">{paths[name]}</svg>;
 }
@@ -180,6 +182,18 @@ function compareProductCodes(a, b) {
 
 function normalizeNcm(value) {
   return value?.replace(/\D/g, "") ?? "";
+}
+
+function normalizeMaterialCodeSearch(value) {
+  return String(value ?? "").toLocaleLowerCase("pt-BR").replace(/[^a-z0-9]/g, "");
+}
+
+function normalizeMaterialNameSearch(value) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("pt-BR")
+    .trim();
 }
 
 function formatRate(value) {
@@ -226,6 +240,7 @@ export default function ProductManager({ readOnly = false }) {
   const [isAddingStructure, setIsAddingStructure] = useState(false);
   const [resolvingIssueId, setResolvingIssueId] = useState(null);
   const [resolutionIssue, setResolutionIssue] = useState(null);
+  const [issueAttachmentTarget, setIssueAttachmentTarget] = useState(null);
   const [iconProduct, setIconProduct] = useState(null);
   const [isSavingIcon, setIsSavingIcon] = useState(false);
   const [productDeleteOpen, setProductDeleteOpen] = useState(false);
@@ -239,6 +254,8 @@ export default function ProductManager({ readOnly = false }) {
   const [rawMaterialEditForm, setRawMaterialEditForm] = useState(emptyRawMaterial);
   const [editingRawMaterial, setEditingRawMaterial] = useState(null);
   const [isSavingRawMaterial, setIsSavingRawMaterial] = useState(false);
+  const [rawMaterialCodeSearch, setRawMaterialCodeSearch] = useState("");
+  const [rawMaterialNameSearch, setRawMaterialNameSearch] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [createStep, setCreateStep] = useState("essential");
@@ -544,6 +561,20 @@ export default function ProductManager({ readOnly = false }) {
       )
       .sort(compareProductCodes);
   }, [products, searchTerm, categoryFilter]);
+
+  const filteredRawMaterials = useMemo(() => {
+    const codeQuery = normalizeMaterialCodeSearch(rawMaterialCodeSearch);
+    const nameQuery = normalizeMaterialNameSearch(rawMaterialNameSearch);
+
+    return rawMaterials.filter((material) => {
+      const matchesCode = !codeQuery || normalizeMaterialCodeSearch(material.code).includes(codeQuery);
+      const matchesName = !nameQuery || normalizeMaterialNameSearch(material.name).includes(nameQuery);
+      return matchesCode && matchesName;
+    });
+  }, [rawMaterials, rawMaterialCodeSearch, rawMaterialNameSearch]);
+  const hasRawMaterialSearch = Boolean(
+    rawMaterialCodeSearch.trim() || rawMaterialNameSearch.trim()
+  );
 
   function showSuccess(message) {
     setSuccessMessage(message);
@@ -1555,6 +1586,7 @@ export default function ProductManager({ readOnly = false }) {
                         </header>
                         <div className="issue-card-actions">
                           <span><strong>{issuePriorityLabels[issue.priority] || "Média"}</strong><small>{issue.due_date ? `Prazo ${new Date(`${issue.due_date}T12:00:00`).toLocaleDateString("pt-BR")}` : "Sem prazo definido"}</small></span>
+                          <button className="issue-files-button" onClick={() => setIssueAttachmentTarget(issue)} type="button"><ActionIcon name="attachment"/>Anexos</button>
                           {!readOnly && <button onClick={() => setResolutionIssue(issue)} type="button">Resolver pendência</button>}
                         </div>
                       </article>
@@ -1585,6 +1617,7 @@ export default function ProductManager({ readOnly = false }) {
                               Prioridade {issuePriorityLabels[issue.priority] || issue.priority} · criada em {formatDateTime(issue.created_at)}
                             </small>
                             <p>{issue.resolution_note || "Resolução não informada."}</p>
+                            <button className="issue-files-button product-history-files" onClick={() => setIssueAttachmentTarget(issue)} type="button"><ActionIcon name="attachment"/>Consultar anexos</button>
                           </div>
                           <time>
                             <span>Resolvida em</span>
@@ -1730,12 +1763,49 @@ export default function ProductManager({ readOnly = false }) {
           <div className="panel-heading">
             <div><span className="form-step">Cadastro mestre</span><h2>Códigos de matéria-prima</h2></div>
             <div className="panel-heading-actions">
-              <span>{rawMaterials.length} códigos</span>
+              <span>
+                {hasRawMaterialSearch
+                  ? `${filteredRawMaterials.length} de ${rawMaterials.length} códigos`
+                  : `${rawMaterials.length} códigos`}
+              </span>
               {!readOnly && <button onClick={() => setRawMaterialOpen(true)} type="button">+ Matéria-prima</button>}
             </div>
           </div>
+          <div className="materials-search-controls" role="search">
+            <label>
+              <span>Pesquisar por código</span>
+              <input
+                aria-label="Pesquisar matéria-prima por código"
+                onChange={(event) => setRawMaterialCodeSearch(event.target.value)}
+                placeholder="Ex.: 016.000.000.0790"
+                type="search"
+                value={rawMaterialCodeSearch}
+              />
+            </label>
+            <label>
+              <span>Pesquisar por nome</span>
+              <input
+                aria-label="Pesquisar matéria-prima por nome"
+                onChange={(event) => setRawMaterialNameSearch(event.target.value)}
+                placeholder="Ex.: RFID reader"
+                type="search"
+                value={rawMaterialNameSearch}
+              />
+            </label>
+            {hasRawMaterialSearch && (
+              <button
+                onClick={() => {
+                  setRawMaterialCodeSearch("");
+                  setRawMaterialNameSearch("");
+                }}
+                type="button"
+              >
+                Limpar filtros
+              </button>
+            )}
+          </div>
           <div className="materials-grid">
-            {rawMaterials.map((material) => (
+            {filteredRawMaterials.map((material) => (
               <article className="raw-material-card" key={material.id} style={categoryVisual(material.unit_type)}>
                 <a className="raw-material-card-main" href={`/materias-primas/${material.id}`} title="Ver histórico de cotações">
                   <span className="raw-material-type-icon"><ProductTypeIcon name="component" /></span>
@@ -1757,6 +1827,12 @@ export default function ProductManager({ readOnly = false }) {
                 </button>
               </article>
             ))}
+            {filteredRawMaterials.length === 0 && (
+              <div className="materials-search-empty">
+                <strong>{hasRawMaterialSearch ? "Nenhuma matéria-prima encontrada" : "Nenhuma matéria-prima cadastrada"}</strong>
+                <span>{hasRawMaterialSearch ? "Revise o código ou o nome pesquisado. Apenas um dos campos já é suficiente." : "Cadastre uma matéria-prima para iniciar este catálogo."}</span>
+              </div>
+            )}
           </div>
         </section>
       )}
@@ -1919,6 +1995,13 @@ export default function ProductManager({ readOnly = false }) {
         loading={Boolean(resolvingIssueId)}
         onClose={() => setResolutionIssue(null)}
         onSubmit={resolveIssue}
+      />
+
+      <IssueAttachmentsModal
+        canDelete={!readOnly}
+        canUpload={!readOnly}
+        issue={issueAttachmentTarget}
+        onClose={() => setIssueAttachmentTarget(null)}
       />
 
       <FormModal

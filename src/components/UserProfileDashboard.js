@@ -566,51 +566,40 @@ export default function UserProfileDashboard({
             </section>
 
             <aside className="profile-focus-panel">
-              <span className="panel-kicker">Meu fluxo</span>
-              <h2>Organize o próximo passo</h2>
-              <p>
-                A visão reúne tarefas da etapa atual dos projetos, pendências de
-                produtos e seus próprios lembretes.
-              </p>
-              <div className="profile-focus-breakdown">
-                <button
-                  onClick={() => {
-                    setListFilter("npi");
-                    setTab("list");
-                  }}
-                  type="button"
-                >
-                  <span>NPI</span>
-                  <strong>{npiTasks.length}</strong>
-                </button>
-                <button
-                  onClick={() => {
-                    setListFilter("issue");
-                    setTab("list");
-                  }}
-                  type="button"
-                >
-                  <span>Pendências</span>
-                  <strong>{issues.length}</strong>
-                </button>
-                <button
-                  onClick={() => {
-                    setListFilter("personal");
-                    setTab("list");
-                  }}
-                  type="button"
-                >
-                  <span>Pessoais</span>
-                  <strong>{openPersonal.length}</strong>
-                </button>
-              </div>
+              <header>
+                <span className="profile-focus-symbol"><TaskIcon name="list" /></span>
+                <div>
+                  <span className="panel-kicker">Atalhos</span>
+                  <h2>Acesse seu trabalho</h2>
+                </div>
+              </header>
+              <nav aria-label="Atalhos da lista de tarefas" className="profile-focus-links">
+                {[
+                  ["npi", "Novos produtos", "Etapas atuais atribuídas", "spark"],
+                  ["issue", "Pendências", "Ocorrências sob sua responsabilidade", "alert"],
+                  ["personal", "Tarefas pessoais", "Lembretes criados por você", "list"],
+                ].map(([filter, label, description, icon]) => (
+                  <button
+                    key={filter}
+                    onClick={() => {
+                      setListFilter(filter);
+                      setTab("list");
+                    }}
+                    type="button"
+                  >
+                    <span><TaskIcon name={icon} /></span>
+                    <span><strong>{label}</strong><small>{description}</small></span>
+                    <TaskIcon name="arrow" />
+                  </button>
+                ))}
+              </nav>
               {canCreateDemand && <button
                 className="profile-focus-add"
                 onClick={() => setCreateOpen(true)}
                 type="button"
               >
                 <TaskIcon name="plus" />
-                Adicionar nova tarefa
+                Nova atividade
               </button>}
             </aside>
           </div>

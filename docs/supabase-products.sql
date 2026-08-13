@@ -72,6 +72,9 @@ alter table public.product_issues
 add column if not exists priority text not null default 'media';
 
 alter table public.product_issues
+add column if not exists created_by uuid references auth.users(id) on delete set null;
+
+alter table public.product_issues
 drop constraint if exists product_issues_priority_check;
 
 alter table public.product_issues
@@ -90,6 +93,18 @@ add constraint product_issues_resolution_check check (
 
 alter table public.product_issues drop constraint if exists product_issues_description_check;
 alter table public.product_issues add constraint product_issues_description_check check (length(trim(description)) >= 10) not valid;
+
+create table if not exists public.product_issue_attachments (
+  id bigint primary key generated always as identity,
+  issue_id bigint not null references public.product_issues(id) on delete cascade,
+  file_name text not null,
+  file_type text,
+  file_size bigint check (file_size is null or file_size >= 0),
+  storage_path text not null unique,
+  public_url text not null,
+  uploaded_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now()
+);
 
 create table if not exists public.product_attachments (
   id bigint primary key generated always as identity,
@@ -441,6 +456,7 @@ on conflict (id) do update set public = excluded.public;
 alter table public.products enable row level security;
 alter table public.product_structure_items enable row level security;
 alter table public.product_issues enable row level security;
+alter table public.product_issue_attachments enable row level security;
 alter table public.ncm_taxes enable row level security;
 alter table public.product_attachments enable row level security;
 alter table public.product_development_projects enable row level security;
@@ -650,6 +666,8 @@ create policy "supplier_material_quotations_all" on public.supplier_material_quo
 -- Acesso equivalente para usuários autenticados; substituir por regras por função/área na implantação.
 grant select, insert, update, delete on public.products to authenticated;
 grant select, insert, update, delete on public.product_issues to authenticated;
+grant select, insert, delete on public.product_issue_attachments to authenticated;
+grant usage, select on sequence public.product_issue_attachments_id_seq to authenticated;
 grant select, insert, update, delete on public.product_development_projects to authenticated;
 grant select, insert, update, delete on public.product_development_tasks to authenticated;
 grant select on public.product_structure_items, public.raw_materials to authenticated;
@@ -836,6 +854,7 @@ revoke insert, update, delete on
   public.products,
   public.product_structure_items,
   public.product_issues,
+  public.product_issue_attachments,
   public.product_attachments,
   public.product_development_projects,
   public.product_development_tasks,
@@ -866,6 +885,7 @@ begin
     'products',
     'product_structure_items',
     'product_issues',
+    'product_issue_attachments',
     'product_attachments',
     'product_development_projects',
     'product_development_tasks',
@@ -939,7 +959,11 @@ as restrictive
 for insert
 to authenticated
 with check (
-  public.current_user_access_role() in ('colaborador', 'engenharia', 'gerente', 'admin')
+  public.current_user_can_edit_operations()
+  or (
+    public.current_user_access_role() = 'colaborador'
+    and created_by = auth.uid()
+  )
 );
 
 -- Canal interno de melhorias. Qualquer usuário autenticado pode registrar
@@ -1046,4 +1070,61 @@ using (
   bucket_id = 'product-files'
   and (storage.foldername(name))[1] = 'improvements'
   and (storage.foldername(name))[2] = auth.uid()::text
+);
+
+-- Evidências das pendências permanecem ligadas ao registro mesmo depois da resolução.
+drop policy if exists "issue_attachments_select" on public.product_issue_attachments;
+drop policy if exists "issue_attachments_insert" on public.product_issue_attachments;
+drop policy if exists "issue_attachments_delete" on public.product_issue_attachments;
+
+create policy "issue_attachments_select"
+on public.product_issue_attachments
+for select
+to authenticated
+using (true);
+
+create policy "issue_attachments_insert"
+on public.product_issue_attachments
+for insert
+to authenticated
+with check (
+  uploaded_by = auth.uid()
+  and (
+    public.current_user_can_edit_operations()
+    or exists (
+      select 1
+      from public.product_issues issue
+      where issue.id = product_issue_attachments.issue_id
+        and issue.created_by = auth.uid()
+    )
+  )
+);
+
+create policy "issue_attachments_delete"
+on public.product_issue_attachments
+for delete
+to authenticated
+using (public.current_user_can_edit_operations());
+
+drop policy if exists "issue_files_insert" on storage.objects;
+drop policy if exists "issue_files_delete" on storage.objects;
+
+create policy "issue_files_insert"
+on storage.objects
+for insert
+to authenticated
+with check (
+  bucket_id = 'product-files'
+  and (storage.foldername(name))[1] = 'issues'
+  and (storage.foldername(name))[2] = auth.uid()::text
+);
+
+create policy "issue_files_delete"
+on storage.objects
+for delete
+to authenticated
+using (
+  bucket_id = 'product-files'
+  and (storage.foldername(name))[1] = 'issues'
+  and public.current_user_can_edit_operations()
 );
