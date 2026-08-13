@@ -189,7 +189,7 @@ export default function ImprovementSuggestionModal({
         </section>
       ) : (
         <form className="modal-form improvement-form" onSubmit={submitSuggestion}>
-          <label>
+          <label className="wide">
             Área da sugestão
             <select value={form.area} onChange={(event) => setForm({ ...form, area: event.target.value })}>
               <option value="interface">Interface e usabilidade</option>
@@ -198,10 +198,6 @@ export default function ImprovementSuggestionModal({
               <option value="integracao">Integrações</option>
               <option value="outro">Outro</option>
             </select>
-          </label>
-          <label>
-            Tela relacionada
-            <input disabled value={pageContext || "Não identificada"} />
           </label>
           <label className="wide">
             Resumo da melhoria

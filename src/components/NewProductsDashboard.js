@@ -95,6 +95,9 @@ export default function NewProductsDashboard({
   const [highlightedTaskId, setHighlightedTaskId] = useState(null);
   const [taskNavigationRequest, setTaskNavigationRequest] = useState(0);
   const [taskNotes, setTaskNotes] = useState({});
+  const [editingTaskNoteId, setEditingTaskNoteId] = useState(null);
+  const [savingTaskNoteId, setSavingTaskNoteId] = useState(null);
+  const [taskNoteError, setTaskNoteError] = useState("");
   const [packageForm, setPackageForm] = useState(emptyPackage);
   const [packageItemForm, setPackageItemForm] = useState(emptyPackageItem);
   const [selectedPackageId, setSelectedPackageId] = useState(null);
@@ -474,9 +477,68 @@ export default function NewProductsDashboard({
 
   async function saveTaskNote(task) {
     if (readOnly) return;
-    const notes = taskNotes[task.id] ?? task.notes ?? "";
-    const { error } = await supabase.from("product_development_tasks").update({ notes }).eq("id", task.id);
-    if (!error) { setTasks((current)=>current.map((item)=>item.id===task.id?{...item,notes}:item)); setMessage("Observação salva."); }
+    const notes = (taskNotes[task.id] ?? task.notes ?? "").trim();
+    setSavingTaskNoteId(task.id);
+    setTaskNoteError("");
+
+    const { data, error } = await supabase
+      .from("product_development_tasks")
+      .update({ notes: notes || null })
+      .eq("id", task.id)
+      .select("*")
+      .single();
+
+    setSavingTaskNoteId(null);
+    if (error) {
+      setTaskNoteError(`Não foi possível salvar a observação: ${error.message}`);
+      return;
+    }
+
+    setTasks((current) =>
+      current.map((item) => (item.id === task.id ? data : item))
+    );
+    setTaskNotes((current) => {
+      const next = { ...current };
+      delete next[task.id];
+      return next;
+    });
+    setEditingTaskNoteId(null);
+    setMessage("Observação salva.");
+    window.dispatchEvent(
+      new CustomEvent("penn:tasks-changed", { detail: { task: data } })
+    );
+  }
+
+  function openTaskDetails(task) {
+    setExpandedTaskId(task.id);
+    setEditingTaskNoteId(null);
+    setTaskNoteError("");
+  }
+
+  function toggleTaskDetails(task) {
+    const isClosing = expandedTaskId === task.id;
+    setExpandedTaskId(isClosing ? null : task.id);
+    setEditingTaskNoteId(null);
+    setTaskNoteError("");
+  }
+
+  function editTaskNote(task) {
+    setTaskNotes((current) => ({
+      ...current,
+      [task.id]: task.notes ?? "",
+    }));
+    setEditingTaskNoteId(task.id);
+    setTaskNoteError("");
+  }
+
+  function cancelTaskNoteEdit(task) {
+    setTaskNotes((current) => {
+      const next = { ...current };
+      delete next[task.id];
+      return next;
+    });
+    setEditingTaskNoteId(null);
+    setTaskNoteError("");
   }
 
   async function uploadTaskAttachment(task, file) {
@@ -691,26 +753,42 @@ export default function NewProductsDashboard({
                         <span>
                           {task.title}
                           <small className="task-assignee">
-                            {task.assignee_name ||
-                              task.owner_area ||
-                              "Sem responsável"}
+                            {task.owner_area || "Área não informada"}
                           </small>
                         </span>
-                        {!readOnly && <button
-                          className="task-assign-trigger"
-                          onClick={() => openTaskAssignment(task)}
-                          title={task.assignee_name ? `Responsável: ${task.assignee_name}` : "Atribuir responsável"}
-                          type="button"
-                        >
-                          <span>{task.assignee_name || "Atribuir"}</span>
-                        </button>}
+                        <div className="task-row-context">
+                          {task.notes && (
+                            <button
+                              aria-label={`Abrir observação de ${task.title}`}
+                              className="task-note-preview"
+                              onClick={() => openTaskDetails(task)}
+                              title={task.notes}
+                              type="button"
+                            >
+                              <span>Observação</span>
+                              <strong>{task.notes}</strong>
+                            </button>
+                          )}
+                          {!readOnly ? (
+                            <button
+                              className="task-assign-trigger"
+                              onClick={() => openTaskAssignment(task)}
+                              title={task.assignee_name ? `Responsável: ${task.assignee_name}` : "Atribuir responsável"}
+                              type="button"
+                            >
+                              <span>{task.assignee_name || "Atribuir"}</span>
+                            </button>
+                          ) : (
+                            <span className="task-assignee-readonly">
+                              {task.assignee_name || "Sem responsável"}
+                            </span>
+                          )}
+                        </div>
                         <button
+                          aria-controls={`task-details-${task.id}`}
+                          aria-expanded={expandedTaskId === task.id}
                           className="task-detail-trigger"
-                          onClick={() =>
-                            setExpandedTaskId(
-                              expandedTaskId === task.id ? null : task.id
-                            )
-                          }
+                          onClick={() => toggleTaskDetails(task)}
                           type="button"
                         >
                           Observações e anexos
@@ -732,53 +810,114 @@ export default function NewProductsDashboard({
                       </div>
 
                       {expandedTaskId === task.id && (
-                        <div className="task-evidence">
-                          <label>
-                            Observações
-                            <textarea
-                              disabled={readOnly}
-                              onChange={(event) =>
-                                setTaskNotes((current) => ({
-                                  ...current,
-                                  [task.id]: event.target.value,
-                                }))
-                              }
-                              rows="3"
-                              value={taskNotes[task.id] ?? task.notes ?? ""}
-                            />
-                          </label>
-                          {!readOnly && <button
-                            onClick={() => saveTaskNote(task)}
-                            type="button"
-                          >
-                            Salvar observação
-                          </button>}
-                          {!readOnly && <label>
-                            Anexar evidência
-                            <input
-                              onChange={(event) =>
-                                uploadTaskAttachment(
-                                  task,
-                                  event.target.files?.[0]
-                                )
-                              }
-                              type="file"
-                            />
-                          </label>}
-                          <div>
-                            {taskAttachments
-                              .filter((item) => item.task_id === task.id)
-                              .map((item) => (
-                                <a
-                                  href={item.public_url}
-                                  key={item.id}
-                                  rel="noreferrer"
-                                  target="_blank"
-                                >
-                                  {item.name}
-                                </a>
-                              ))}
-                          </div>
+                        <div className="task-evidence" id={`task-details-${task.id}`}>
+                          <section className="task-note-section">
+                            {editingTaskNoteId === task.id ? (
+                              <>
+                                <label className="task-note-editor">
+                                  Editar observação
+                                  <textarea
+                                    autoFocus
+                                    onChange={(event) =>
+                                      setTaskNotes((current) => ({
+                                        ...current,
+                                        [task.id]: event.target.value,
+                                      }))
+                                    }
+                                    rows="4"
+                                    value={taskNotes[task.id] ?? ""}
+                                  />
+                                </label>
+                                {taskNoteError && (
+                                  <p className="task-note-error" role="alert">
+                                    {taskNoteError}
+                                  </p>
+                                )}
+                                <div className="task-note-actions">
+                                  <button
+                                    className="secondary"
+                                    disabled={savingTaskNoteId === task.id}
+                                    onClick={() => cancelTaskNoteEdit(task)}
+                                    type="button"
+                                  >
+                                    Cancelar
+                                  </button>
+                                  <button
+                                    disabled={savingTaskNoteId === task.id}
+                                    onClick={() => saveTaskNote(task)}
+                                    type="button"
+                                  >
+                                    {savingTaskNoteId === task.id
+                                      ? "Salvando..."
+                                      : "Salvar observação"}
+                                  </button>
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <header>
+                                  <div>
+                                    <span>Observação registrada</span>
+                                    <small>Descrição desta atividade</small>
+                                  </div>
+                                  {!readOnly && (
+                                    <button
+                                      onClick={() => editTaskNote(task)}
+                                      type="button"
+                                    >
+                                      Editar observação
+                                    </button>
+                                  )}
+                                </header>
+                                <p className={!task.notes ? "empty" : ""}>
+                                  {task.notes || "Nenhuma observação registrada."}
+                                </p>
+                              </>
+                            )}
+                          </section>
+
+                          <section className="task-attachment-section">
+                            <header>
+                              <div>
+                                <span>Anexos</span>
+                                <small>Evidências e documentos da atividade</small>
+                              </div>
+                              {!readOnly && (
+                                <label className="task-attachment-upload">
+                                  Adicionar arquivo
+                                  <input
+                                    onChange={(event) =>
+                                      uploadTaskAttachment(
+                                        task,
+                                        event.target.files?.[0]
+                                      )
+                                    }
+                                    type="file"
+                                  />
+                                </label>
+                              )}
+                            </header>
+                            <div className="task-evidence-files">
+                              {taskAttachments.filter(
+                                (item) => item.task_id === task.id
+                              ).length ? (
+                                taskAttachments
+                                  .filter((item) => item.task_id === task.id)
+                                  .map((item) => (
+                                    <a
+                                      href={item.public_url}
+                                      key={item.id}
+                                      rel="noreferrer"
+                                      target="_blank"
+                                    >
+                                      {item.name}
+                                    </a>
+                                  ))
+                              ) : (
+                                <span>Nenhum anexo enviado.</span>
+                              )}
+                            </div>
+                          </section>
                         </div>
                       )}
                     </div>
