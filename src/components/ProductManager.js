@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import FormModal from "@/components/FormModal";
 import IssueResolutionModal from "@/components/IssueResolutionModal";
-import ProductCompositions from "@/components/ProductCompositions";
 import { supabase } from "@/lib/supabaseClient";
 import SupplierDashboard from "@/components/SupplierDashboard";
 import SpreadsheetImport from "@/components/SpreadsheetImport";
@@ -123,13 +122,13 @@ const ncmTaxColumns =
   "id, ncm, description, ipi_rate, pis_rate, cofins_rate, icms_rate, import_tax_rate, updated_at";
 
 const tabs = [
-  { id: "overview", label: "Resumo", icon: "overview" },
-  { id: "edit", label: "Editar", icon: "edit" },
-  { id: "structure", label: "Estrutura", icon: "structure" },
-  { id: "compositions", label: "Composições", icon: "budget" },
-  { id: "issues", label: "Pendências", icon: "issues" },
-  { id: "fiscal", label: "Fiscal", icon: "fiscal" },
-  { id: "files", label: "Arquivos", icon: "documents" },
+  { id: "overview", label: "Resumo" },
+  { id: "edit", label: "Editar" },
+  { id: "structure", label: "Estrutura" },
+  { id: "compositions", label: "Composições", disabled: true, badge: "Em breve" },
+  { id: "issues", label: "Pendências" },
+  { id: "fiscal", label: "Fiscal" },
+  { id: "files", label: "Arquivos" },
 ];
 
 function ActionIcon({ name }) {
@@ -544,6 +543,7 @@ export default function ProductManager({ readOnly = false }) {
   }
 
   function openTab(tabId) {
+    if (tabs.find((tab) => tab.id === tabId)?.disabled) return;
     setActiveTab(tabId);
   }
 
@@ -553,14 +553,17 @@ export default function ProductManager({ readOnly = false }) {
     }
 
     event.preventDefault();
-    let nextIndex = currentIndex;
+    const enabledTabs = tabs.filter((tab) => !tab.disabled);
+    const currentTab = tabs[currentIndex];
+    const enabledIndex = Math.max(0, enabledTabs.findIndex((tab) => tab.id === currentTab.id));
+    let nextIndex = enabledIndex;
 
-    if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
-    if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % tabs.length;
+    if (event.key === "ArrowLeft") nextIndex = (enabledIndex - 1 + enabledTabs.length) % enabledTabs.length;
+    if (event.key === "ArrowRight") nextIndex = (enabledIndex + 1) % enabledTabs.length;
     if (event.key === "Home") nextIndex = 0;
-    if (event.key === "End") nextIndex = tabs.length - 1;
+    if (event.key === "End") nextIndex = enabledTabs.length - 1;
 
-    const nextTab = tabs[nextIndex];
+    const nextTab = enabledTabs[nextIndex];
     setActiveTab(nextTab.id);
     document.getElementById(`product-tab-${nextTab.id}`)?.focus();
   }
@@ -1333,20 +1336,24 @@ export default function ProductManager({ readOnly = false }) {
               <nav className="product-detail-nav" role="tablist" aria-label="Dados do produto">
                 {tabs.map((tab, tabIndex) => (
                   <button
-                    className={activeTab === tab.id ? "active" : ""}
-                    aria-selected={activeTab === tab.id}
+                    className={`${activeTab === tab.id ? "active" : ""}${tab.disabled ? " is-coming-soon" : ""}`}
+                    aria-disabled={tab.disabled || undefined}
+                    aria-selected={!tab.disabled && activeTab === tab.id}
+                    disabled={tab.disabled}
                     id={`product-tab-${tab.id}`}
                     key={tab.id}
                     onClick={() => openTab(tab.id)}
                     onKeyDown={(event) => navigateProductTabs(event, tabIndex)}
                     role="tab"
-                    tabIndex={activeTab === tab.id ? 0 : -1}
+                    tabIndex={!tab.disabled && activeTab === tab.id ? 0 : -1}
                     type="button"
                   >
-                    <ActionIcon name={tab.icon} />
                     <span>{tab.label}</span>
+                    {tab.badge && (
+                      <small className="product-tab-coming-soon">{tab.badge}</small>
+                    )}
                     {tab.id === "issues" && selectedIssues.length > 0 && (
-                      <small>{selectedIssues.length}</small>
+                      <small className="product-tab-count">{selectedIssues.length}</small>
                     )}
                   </button>
                 ))}
@@ -1460,7 +1467,7 @@ export default function ProductManager({ readOnly = false }) {
                       </select>
                     </label>
 
-                    <label className="wide-field">
+                    <label className="wide-field product-characteristics-field">
                       Caracteristicas
                       <textarea
                         name="characteristics"
@@ -1578,12 +1585,6 @@ export default function ProductManager({ readOnly = false }) {
                       )}
                     </div>
                   </section>
-                </section>
-              )}
-
-              {activeTab === "compositions" && (
-                <section className="tab-panel composition-tab-panel" aria-label="Composições do produto">
-                  <ProductCompositions product={selectedProduct} readOnly={readOnly} />
                 </section>
               )}
 
