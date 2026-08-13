@@ -830,8 +830,8 @@ to authenticated
 using (public.current_user_access_role() = 'admin')
 with check (public.current_user_access_role() = 'admin');
 
--- RBAC operacional. Colaboradores consultam a base e podem inserir novas
--- demandas; Engenharia, Gerencia e Admin podem manter os dados operacionais.
+-- RBAC operacional. Colaboradores consultam a base e podem inserir somente
+-- pendencias; Engenharia, Gerencia e Admin podem manter os dados operacionais.
 revoke insert, update, delete on
   public.products,
   public.product_structure_items,
@@ -900,8 +900,11 @@ begin
   end loop;
 
   foreach guarded_table in array array[
+    'products',
     'product_structure_items',
     'product_attachments',
+    'product_development_projects',
+    'product_development_tasks',
     'product_budget_items',
     'raw_materials',
     'product_categories',
@@ -917,7 +920,8 @@ begin
     'supplier_materials',
     'supplier_contacts',
     'supplier_material_attachments',
-    'supplier_material_quotations'
+    'supplier_material_quotations',
+    'personal_tasks'
   ] loop
     execute format('drop policy if exists "rbac_insert_guard" on public.%I', guarded_table);
     execute format(
@@ -928,17 +932,118 @@ begin
 end
 $$;
 
-drop policy if exists "rbac_insert_guard" on public.products;
+drop policy if exists "rbac_insert_guard" on public.product_issues;
 create policy "rbac_insert_guard"
-on public.products
+on public.product_issues
 as restrictive
 for insert
 to authenticated
 with check (
-  public.current_user_can_edit_operations()
-  or (
-    public.current_user_access_role() = 'colaborador'
-    and code is null
-    and status = 'avaliacao'
+  public.current_user_access_role() in ('colaborador', 'engenharia', 'gerente', 'admin')
+);
+
+-- Canal interno de melhorias. Qualquer usuário autenticado pode registrar
+-- sugestões e consultar somente os próprios envios.
+create table if not exists public.improvement_suggestions (
+  id bigint primary key generated always as identity,
+  submitted_by uuid not null references auth.users(id) on delete cascade,
+  submitter_name text not null,
+  submitter_email text not null,
+  area text not null default 'interface',
+  title text not null check (length(trim(title)) >= 3),
+  description text not null check (length(trim(description)) >= 10),
+  page_context text,
+  app_version text,
+  status text not null default 'nova' check (status in ('nova', 'em_analise', 'planejada', 'concluida', 'descartada')),
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.improvement_suggestion_attachments (
+  id bigint primary key generated always as identity,
+  suggestion_id bigint not null references public.improvement_suggestions(id) on delete cascade,
+  file_name text not null,
+  storage_path text not null unique,
+  public_url text not null,
+  created_at timestamptz not null default now()
+);
+
+alter table public.improvement_suggestions enable row level security;
+alter table public.improvement_suggestion_attachments enable row level security;
+
+grant select, insert on public.improvement_suggestions to authenticated;
+grant select, insert on public.improvement_suggestion_attachments to authenticated;
+grant usage, select on sequence public.improvement_suggestions_id_seq to authenticated;
+grant usage, select on sequence public.improvement_suggestion_attachments_id_seq to authenticated;
+
+drop policy if exists "improvement_suggestions_own_select" on public.improvement_suggestions;
+drop policy if exists "improvement_suggestions_own_insert" on public.improvement_suggestions;
+drop policy if exists "improvement_attachments_own_select" on public.improvement_suggestion_attachments;
+drop policy if exists "improvement_attachments_own_insert" on public.improvement_suggestion_attachments;
+
+create policy "improvement_suggestions_own_select"
+on public.improvement_suggestions
+for select
+to authenticated
+using (
+  submitted_by = auth.uid()
+  or public.current_user_access_role() = 'admin'
+);
+
+create policy "improvement_suggestions_own_insert"
+on public.improvement_suggestions
+for insert
+to authenticated
+with check (submitted_by = auth.uid());
+
+create policy "improvement_attachments_own_select"
+on public.improvement_suggestion_attachments
+for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.improvement_suggestions suggestion
+    where suggestion.id = improvement_suggestion_attachments.suggestion_id
+      and (
+        suggestion.submitted_by = auth.uid()
+        or public.current_user_access_role() = 'admin'
+      )
   )
+);
+
+create policy "improvement_attachments_own_insert"
+on public.improvement_suggestion_attachments
+for insert
+to authenticated
+with check (
+  exists (
+    select 1
+    from public.improvement_suggestions suggestion
+    where suggestion.id = improvement_suggestion_attachments.suggestion_id
+      and suggestion.submitted_by = auth.uid()
+  )
+);
+
+-- As imagens ficam isoladas pelo ID do usuário dentro do bucket existente.
+drop policy if exists "improvement_files_insert" on storage.objects;
+drop policy if exists "improvement_files_delete" on storage.objects;
+
+create policy "improvement_files_insert"
+on storage.objects
+for insert
+to authenticated
+with check (
+  bucket_id = 'product-files'
+  and (storage.foldername(name))[1] = 'improvements'
+  and (storage.foldername(name))[2] = auth.uid()::text
+);
+
+create policy "improvement_files_delete"
+on storage.objects
+for delete
+to authenticated
+using (
+  bucket_id = 'product-files'
+  and (storage.foldername(name))[1] = 'improvements'
+  and (storage.foldername(name))[2] = auth.uid()::text
 );

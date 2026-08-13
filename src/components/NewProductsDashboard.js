@@ -111,6 +111,10 @@ export default function NewProductsDashboard({
   const [productCodeOpen, setProductCodeOpen] = useState(false);
   const [productCodeDraft, setProductCodeDraft] = useState("");
   const [savingProductCode, setSavingProductCode] = useState(false);
+  const [assignmentTask, setAssignmentTask] = useState(null);
+  const [assignmentDraft, setAssignmentDraft] = useState({ assigneeEmail: "", dueDate: "" });
+  const [savingAssignment, setSavingAssignment] = useState(false);
+  const [assignmentError, setAssignmentError] = useState("");
 
   async function loadWorkflow() {
     const [productsResult, projectsResult, tasksResult, attachmentsResult, historyResult, packagesResult, quotationItemsResult, projectHistoryResult, profilesResult] = await Promise.all([
@@ -122,7 +126,7 @@ export default function NewProductsDashboard({
       supabase.from("quotation_packages").select("*").order("created_at", { ascending: false }),
       supabase.from("quotation_package_items").select("*").order("created_at"),
       supabase.from("product_development_project_history").select("*").order("changed_at",{ascending:false}),
-      supabase.from("user_profiles").select("id,full_name,email").order("full_name"),
+      supabase.from("user_profiles").select("id,full_name,email,area").order("full_name"),
     ]);
     if (projectsResult.error || tasksResult.error) { setMessage(`Execute o SQL do fluxo de desenvolvimento: ${projectsResult.error?.message ?? tasksResult.error?.message}`); }
     setProducts(productsResult.data ?? []); setProjects(projectsResult.data ?? []); setTasks(tasksResult.data ?? []);
@@ -186,6 +190,11 @@ export default function NewProductsDashboard({
   const completedSlice = completedTasks / taskTotal * 100;
   const progressingSlice = (completedTasks + progressingTasks) / taskTotal * 100;
   const blockedSlice = (completedTasks + progressingTasks + blockedTasks) / taskTotal * 100;
+  const selectedAssignmentProfile = userProfiles.find(
+    (profile) =>
+      profile.email?.trim().toLowerCase() ===
+      assignmentDraft.assigneeEmail.trim().toLowerCase()
+  );
 
   useEffect(() => {
     if (selectedCurrentStageKey) {
@@ -407,7 +416,61 @@ export default function NewProductsDashboard({
     window.dispatchEvent(new CustomEvent("penn:tasks-changed"));
   }
 
-  async function assignTask(task){if(readOnly)return;const available=userProfiles.map(profile=>profile.full_name).filter(Boolean).join(", ");const name=window.prompt(`Nome do responsável cadastrado:\n${available}`,task.assignee_name||"");if(name===null)return;const profile=userProfiles.find(item=>item.full_name?.toLowerCase()===name.trim().toLowerCase());if(!profile){setMessage("Selecione um nome existente no cadastro de usuários.");return;}const dueDate=window.prompt("Prazo da tarefa (AAAA-MM-DD):",task.due_date||"");if(dueDate===null)return;const{data,error}=await supabase.from("product_development_tasks").update({assignee_name:profile.full_name,assignee_email:profile.email,due_date:dueDate.trim()||null}).eq("id",task.id).select("*").single();if(error){setMessage(error.message);return;}setTasks(current=>current.map(item=>item.id===task.id?data:item));window.dispatchEvent(new CustomEvent("penn:tasks-changed"));setMessage("Responsável e prazo da tarefa atualizados.");}
+  function openTaskAssignment(task) {
+    if (readOnly) return;
+    setAssignmentError("");
+    setAssignmentTask(task);
+    setAssignmentDraft({
+      assigneeEmail: task.assignee_email || "",
+      dueDate: task.due_date || "",
+    });
+  }
+
+  function closeTaskAssignment() {
+    if (savingAssignment) return;
+    setAssignmentTask(null);
+    setAssignmentDraft({ assigneeEmail: "", dueDate: "" });
+    setAssignmentError("");
+  }
+
+  async function assignTask(event) {
+    event.preventDefault();
+    if (readOnly || !assignmentTask || savingAssignment) return;
+
+    const normalizedEmail = assignmentDraft.assigneeEmail.trim().toLowerCase();
+    const profile = userProfiles.find(
+      (item) => item.email?.trim().toLowerCase() === normalizedEmail
+    );
+
+    if (!profile) {
+      setAssignmentError("Selecione uma pessoa com conta ativa na aplicação.");
+      return;
+    }
+
+    setSavingAssignment(true);
+    const { data, error } = await supabase
+      .from("product_development_tasks")
+      .update({
+        assignee_name: profile.full_name || profile.email,
+        assignee_email: profile.email.trim().toLowerCase(),
+        due_date: assignmentDraft.dueDate || null,
+      })
+      .eq("id", assignmentTask.id)
+      .select("*")
+      .single();
+    setSavingAssignment(false);
+
+    if (error) {
+      setAssignmentError(`Não foi possível atribuir a tarefa: ${error.message}`);
+      return;
+    }
+
+    setTasks((current) => current.map((item) => (item.id === data.id ? data : item)));
+    setAssignmentTask(null);
+    setAssignmentDraft({ assigneeEmail: "", dueDate: "" });
+    setMessage(`Tarefa atribuída a ${data.assignee_name}.`);
+    window.dispatchEvent(new CustomEvent("penn:tasks-changed", { detail: { task: data } }));
+  }
 
   async function saveTaskNote(task) {
     if (readOnly) return;
@@ -635,10 +698,11 @@ export default function NewProductsDashboard({
                         </span>
                         {!readOnly && <button
                           className="task-assign-trigger"
-                          onClick={() => assignTask(task)}
+                          onClick={() => openTaskAssignment(task)}
+                          title={task.assignee_name ? `Responsável: ${task.assignee_name}` : "Atribuir responsável"}
                           type="button"
                         >
-                          Atribuir
+                          <span>{task.assignee_name || "Atribuir"}</span>
                         </button>}
                         <button
                           className="task-detail-trigger"
@@ -725,6 +789,66 @@ export default function NewProductsDashboard({
           );
         })}
       </section>
+      <FormModal
+        description="Selecione uma pessoa com conta na aplicação. A atividade aparecerá imediatamente no perfil escolhido e nos painéis de acompanhamento."
+        eyebrow="Responsável pela atividade"
+        onClose={closeTaskAssignment}
+        open={Boolean(assignmentTask)}
+        title="Atribuir tarefa"
+      >
+        <form className="modal-form task-assignment-form" onSubmit={assignTask}>
+          <div className="task-assignment-context wide">
+            <span>Atividade</span>
+            <strong>{assignmentTask?.title}</strong>
+            <small>
+              {selectedProject?.product?.name || "Novo produto"} · {assignmentTask?.owner_area || "Área não informada"}
+            </small>
+          </div>
+          <label className="wide">
+            Pessoa responsável
+            <select
+              autoFocus
+              required
+              value={assignmentDraft.assigneeEmail}
+              onChange={(event) => {
+                setAssignmentError("");
+                setAssignmentDraft({ ...assignmentDraft, assigneeEmail: event.target.value });
+              }}
+            >
+              <option value="">Selecione uma pessoa</option>
+              {userProfiles
+                .filter((profile) => profile.email)
+                .map((profile) => (
+                  <option key={profile.id} value={profile.email}>
+                    {profile.full_name || profile.email}{profile.area ? ` · ${profile.area}` : ""}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <label>
+            Prazo da atividade
+            <input
+              type="date"
+              value={assignmentDraft.dueDate}
+              onChange={(event) => setAssignmentDraft({ ...assignmentDraft, dueDate: event.target.value })}
+            />
+          </label>
+          <div className={`task-assignment-person ${selectedAssignmentProfile ? "selected" : ""}`}>
+            <span>{(selectedAssignmentProfile?.full_name || "?").slice(0, 2).toUpperCase()}</span>
+            <div>
+              <strong>{selectedAssignmentProfile?.full_name || "Aguardando seleção"}</strong>
+              <small>{selectedAssignmentProfile?.email || "Escolha uma conta cadastrada"}</small>
+            </div>
+          </div>
+          {assignmentError && <p className="task-assignment-error wide">{assignmentError}</p>}
+          <footer className="modal-form-actions">
+            <button disabled={savingAssignment} onClick={closeTaskAssignment} type="button">Cancelar</button>
+            <button disabled={savingAssignment || !selectedAssignmentProfile} type="submit">
+              {savingAssignment ? "Atribuindo..." : "Confirmar responsável"}
+            </button>
+          </footer>
+        </form>
+      </FormModal>
       <FormModal
         description="Informe o código definitivo reservado para este produto. O sistema validará duplicidades antes de publicar o item no catálogo."
         eyebrow="Etapa 7 · Codificação"

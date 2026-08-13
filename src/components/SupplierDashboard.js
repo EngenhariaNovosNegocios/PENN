@@ -529,14 +529,16 @@ export default function SupplierDashboard({ readOnly = false }) {
                         <span className="supplier-material-symbol"><SupplierIcon name="materials"/></span>
                         <div className="supplier-material-identity">
                           <strong>{material?.code || "Sem código"}</strong>
-                          <small title={material?.name || "Matéria-prima"}>{material?.name || "Matéria-prima"}</small>
+                          <small>{material?.name || "Matéria-prima"}</small>
+                        </div>
+                        <div className="supplier-material-details">
                           <span className="supplier-material-meta">
                             <em>{category}</em>
                             <small>{uses} {uses === 1 ? "estrutura" : "estruturas"}</small>
                           </span>
+                          <span className="supplier-material-price"><small>Último preço</small><strong>{formatMoney(link.last_price, link.currency)}</strong></span>
+                          <button className="material-commercial-trigger" onClick={() => openCommercialConditions(link)} type="button">Condições <SupplierIcon name="arrow"/></button>
                         </div>
-                        <span className="supplier-material-price"><small>Último preço</small><strong>{formatMoney(link.last_price, link.currency)}</strong></span>
-                        <button className="material-commercial-trigger" onClick={() => openCommercialConditions(link)} type="button">Condições <SupplierIcon name="arrow"/></button>
                       </article>
                     ); })}
                     {!selectedLinks.length && <div className="supplier-empty"><strong>Nenhuma matéria-prima vinculada</strong><span>Use o botão acima para montar o portfólio deste fornecedor.</span></div>}
@@ -567,8 +569,14 @@ export default function SupplierDashboard({ readOnly = false }) {
       <FormModal description={`${selectedMaterial?.code || "Item"} · ${selectedMaterial?.name || "Matéria-prima"}`} eyebrow="Condições comerciais" onClose={() => setCommercialLink(null)} open={Boolean(commercialLink)} size="large" title="Negociação com o fornecedor">
         {commercialLink && <form className="supplier-commercial-modal" onSubmit={saveMaterial}>
           <section className="supplier-commercial-summary"><span><SupplierIcon name="money"/></span><div><strong>{formatMoney(commercialDraft.last_price, commercialDraft.currency)}</strong><small>Preço atual informado</small></div><div><strong>{structures.filter((structure) => structure.material_code === selectedMaterial?.code).length}</strong><small>estruturas utilizam este item</small></div></section>
-          <fieldset className="supplier-commercial-fields" disabled={readOnly}><label>P/N do fornecedor<input value={commercialDraft.supplier_part_number || ""} onChange={(event) => setCommercialDraft({ ...commercialDraft, supplier_part_number: event.target.value })}/></label><label>Último preço<input type="number" min="0" step="0.01" value={commercialDraft.last_price ?? ""} onChange={(event) => setCommercialDraft({ ...commercialDraft, last_price: event.target.value })}/></label><label>Moeda<select value={commercialDraft.currency || "BRL"} onChange={(event) => setCommercialDraft({ ...commercialDraft, currency: event.target.value })}><option>BRL</option><option>USD</option></select></label><label>Pedido mínimo<input type="number" min="0" step="0.01" value={commercialDraft.minimum_order ?? ""} onChange={(event) => setCommercialDraft({ ...commercialDraft, minimum_order: event.target.value })}/></label></fieldset>
-          <section className="supplier-material-attachments">{!readOnly && <label><SupplierIcon name="file"/>Adicionar anexo<input type="file" onChange={(event) => { uploadMaterialAttachment(commercialLink, event.target.files?.[0]); event.target.value = ""; }}/></label>}<div>{selectedMaterialAttachments.map((item) => <span key={item.id}><a href={item.public_url} target="_blank" rel="noreferrer">{item.name}</a>{!readOnly && <button aria-label={`Excluir ${item.name}`} onClick={() => removeMaterialAttachment(item)} type="button">×</button>}</span>)}{!selectedMaterialAttachments.length && <small>Nenhum anexo comercial</small>}</div></section>
+          <section className="supplier-commercial-editor">
+            <header><div><span>Dados da negociação</span><strong>Condições vigentes</strong></div><small>Valores utilizados no histórico de cotações</small></header>
+            <fieldset className="supplier-commercial-fields" disabled={readOnly}><label>P/N do fornecedor<input value={commercialDraft.supplier_part_number || ""} onChange={(event) => setCommercialDraft({ ...commercialDraft, supplier_part_number: event.target.value })}/></label><label>Último preço<input type="number" min="0" step="0.01" value={commercialDraft.last_price ?? ""} onChange={(event) => setCommercialDraft({ ...commercialDraft, last_price: event.target.value })}/></label><label>Moeda<select value={commercialDraft.currency || "BRL"} onChange={(event) => setCommercialDraft({ ...commercialDraft, currency: event.target.value })}><option>BRL</option><option>USD</option></select></label><label>Pedido mínimo<input type="number" min="0" step="0.01" value={commercialDraft.minimum_order ?? ""} onChange={(event) => setCommercialDraft({ ...commercialDraft, minimum_order: event.target.value })}/></label></fieldset>
+          </section>
+          <section className="supplier-material-attachments">
+            <header><div><strong>Anexos comerciais</strong><small>Propostas, fichas técnicas e documentos desta negociação</small></div>{!readOnly && <label><SupplierIcon name="file"/>Adicionar anexo<input type="file" onChange={(event) => { uploadMaterialAttachment(commercialLink, event.target.files?.[0]); event.target.value = ""; }}/></label>}</header>
+            <div className="supplier-material-attachment-list">{selectedMaterialAttachments.map((item) => <span key={item.id}><a href={item.public_url} target="_blank" rel="noreferrer">{item.name}</a>{!readOnly && <button aria-label={`Excluir ${item.name}`} onClick={() => removeMaterialAttachment(item)} type="button">×</button>}</span>)}{!selectedMaterialAttachments.length && <small>Nenhum anexo comercial</small>}</div>
+          </section>
           <footer className="supplier-commercial-actions">{!readOnly && <button className="danger" onClick={() => removeMaterial(commercialLink.raw_material_id)} type="button">Remover vínculo</button>}<span/><button onClick={() => setCommercialLink(null)} type="button">Fechar</button>{!readOnly && <button type="submit">Salvar condições</button>}</footer>
         </form>}
       </FormModal>

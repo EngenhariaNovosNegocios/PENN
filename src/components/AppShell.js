@@ -9,6 +9,7 @@ import UserProfileDashboard from "@/components/UserProfileDashboard";
 import ManagerActivityDashboard from "@/components/ManagerActivityDashboard";
 import AccessManagementDashboard from "@/components/AccessManagementDashboard";
 import ConnectedUserOverlay from "@/components/ConnectedUserOverlay";
+import ImprovementSuggestionModal from "@/components/ImprovementSuggestionModal";
 import { isAssignedTo } from "@/lib/assignee";
 import {
   canAccessPortalPage,
@@ -17,6 +18,7 @@ import {
 } from "@/lib/accessControl";
 import { getCurrentStageTasks } from "@/lib/developmentWorkflow";
 import { supabase } from "@/lib/supabaseClient";
+import packageMetadata from "../../package.json";
 
 const pageTitles = {
   overview: "Visão geral",
@@ -112,17 +114,12 @@ const Icon = ({ name }) => {
         <path d="M8 13h8M8 17h6" />
       </>
     ),
-    settings: (
+    improve: (
       <>
-        <circle cx="12" cy="12" r="3" />
-        <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z" />
-      </>
-    ),
-    help: (
-      <>
-        <circle cx="12" cy="12" r="10" />
-        <path d="M9.1 9a3 3 0 1 1 5.7 1.4c-.8 1.1-2.8 1.5-2.8 3.1" />
-        <path d="M12 18h.01" />
+        <path d="M9 18h6" />
+        <path d="M10 22h4" />
+        <path d="M8.5 14.5A7 7 0 1 1 17 13c-1.2 1-2 2.1-2 3H9c0-.7-.4-1.1-.5-1.5Z" />
+        <path d="M12 2v2M4.2 5.2l1.4 1.4M19.8 5.2l-1.4 1.4" />
       </>
     ),
     tasks: (
@@ -184,7 +181,7 @@ const auxiliaryPages = new Set(["profile"]);
 
 function canAccessPage(role, pageId) {
   if (auxiliaryPages.has(pageId)) {
-    return true;
+    return canAccessPortalPage(role, pageId);
   }
 
   const page = navigation.find((item) => item.id === pageId);
@@ -204,6 +201,7 @@ export default function AppShell({ children }) {
   const [roleLoaded, setRoleLoaded] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [selectedOnlineUser, setSelectedOnlineUser] = useState(null);
+  const [improvementOpen, setImprovementOpen] = useState(false);
 
   const visibleNavigation = useMemo(
     () =>
@@ -385,7 +383,7 @@ export default function AppShell({ children }) {
   }
 
   function openDevelopmentTask(task) {
-    if (!task?.projectId) {
+    if (!task?.projectId || !canAccessPage(accessRole, "new-products")) {
       return;
     }
 
@@ -438,19 +436,21 @@ export default function AppShell({ children }) {
         </div>
 
         <nav className="primary-nav" aria-label="Navegação principal">
-          <button
-            className={`nav-item personal-tasks-nav ${
-              activePage === "profile" ? "active" : ""
-            }`}
-            aria-current={activePage === "profile" ? "page" : undefined}
-            onClick={() => openPage("profile")}
-            title={collapsed ? "Minhas tarefas" : undefined}
-            type="button"
-          >
-            <Icon name="tasks" />
-            <span>Minhas tarefas</span>
-            {profileAlertCount > 0 && <small>{profileAlertCount}</small>}
-          </button>
+          {canAccessPage(accessRole, "profile") && (
+            <button
+              className={`nav-item personal-tasks-nav ${
+                activePage === "profile" ? "active" : ""
+              }`}
+              aria-current={activePage === "profile" ? "page" : undefined}
+              onClick={() => openPage("profile")}
+              title={collapsed ? "Minhas tarefas" : undefined}
+              type="button"
+            >
+              <Icon name="tasks" />
+              <span>Minhas tarefas</span>
+              {profileAlertCount > 0 && <small>{profileAlertCount}</small>}
+            </button>
+          )}
 
           <span className="nav-section-label">Workspace</span>
           {visibleNavigation.map((item) => (
@@ -475,26 +475,39 @@ export default function AppShell({ children }) {
         </nav>
 
         <div className="sidebar-footer">
-          <button className="nav-item" disabled type="button">
-            <Icon name="settings" />
-            <span>Configurações</span>
-          </button>
-          <button className="nav-item" disabled type="button">
-            <Icon name="help" />
-            <span>Ajuda</span>
-          </button>
           <button
-            className="user-card"
-            onClick={() => openPage("profile")}
+            className="nav-item improvement-nav-item"
+            onClick={() => setImprovementOpen(true)}
+            title={collapsed ? "Melhorias" : undefined}
             type="button"
           >
-            <span className="avatar">{getInitials(profileName).toUpperCase()}</span>
-            <span>
-              <strong>{profileName}</strong>
-              <small>{userEmail || "Meu perfil e pendencias"}</small>
-            </span>
-            <span className="online-dot" />
+            <Icon name="improve" />
+            <span>Melhorias</span>
           </button>
+          <small className="app-version">PENN v{packageMetadata.version}</small>
+          {canAccessPage(accessRole, "profile") ? (
+            <button
+              className="user-card"
+              onClick={() => openPage("profile")}
+              type="button"
+            >
+              <span className="avatar">{getInitials(profileName).toUpperCase()}</span>
+              <span>
+                <strong>{profileName}</strong>
+                <small>{userEmail || "Meu perfil e pendencias"}</small>
+              </span>
+              <span className="online-dot" />
+            </button>
+          ) : (
+            <div className="user-card user-card-static">
+              <span className="avatar">{getInitials(profileName).toUpperCase()}</span>
+              <span>
+                <strong>{profileName}</strong>
+                <small>{userEmail || "Acesso de consulta"}</small>
+              </span>
+              <span className="online-dot" />
+            </div>
+          )}
         </div>
       </aside>
 
@@ -576,12 +589,14 @@ export default function AppShell({ children }) {
           <section className="app-page" hidden={activePage !== "products"}>
             {productWorkspace}
           </section>
-          <section className="app-page" hidden={activePage !== "new-products"}>
-            <NewProductsDashboard
-              canCreateDemand={demandCreationAllowed}
-              readOnly={readOnly}
-            />
-          </section>
+          {canAccessPage(accessRole, "new-products") && (
+            <section className="app-page" hidden={activePage !== "new-products"}>
+              <NewProductsDashboard
+                canCreateDemand={demandCreationAllowed}
+                readOnly={readOnly}
+              />
+            </section>
+          )}
           <section className="app-page" hidden={activePage !== "intelligence"}>
             <StrategicIntelligenceDashboard onOpenProduct={openProduct} />
           </section>
@@ -605,16 +620,24 @@ export default function AppShell({ children }) {
               <AccessManagementDashboard />
             </section>
           )}
-          <section className="app-page" hidden={activePage !== "profile"}>
-            <UserProfileDashboard
-              canCreateDemand={demandCreationAllowed}
-              onOpenDevelopmentTask={openDevelopmentTask}
-              onOpenIssue={openAssignedIssue}
-              readOnly={readOnly}
-            />
-          </section>
+          {canAccessPage(accessRole, "profile") && (
+            <section className="app-page" hidden={activePage !== "profile"}>
+              <UserProfileDashboard
+                canCreateDemand={!readOnly}
+                onOpenDevelopmentTask={openDevelopmentTask}
+                onOpenIssue={openAssignedIssue}
+                readOnly={readOnly}
+              />
+            </section>
+          )}
         </div>
       </section>
+      <ImprovementSuggestionModal
+        appVersion={packageMetadata.version}
+        onClose={() => setImprovementOpen(false)}
+        open={improvementOpen}
+        pageContext={pageTitles[activePage] ?? pageTitles.overview}
+      />
       <ConnectedUserOverlay
         onClose={() => setSelectedOnlineUser(null)}
         onOpenIssue={openAssignedIssue}

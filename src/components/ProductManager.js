@@ -250,6 +250,21 @@ export default function ProductManager({ readOnly = false }) {
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [categoryName, setCategoryName] = useState("");
   const [categoryTarget, setCategoryTarget] = useState("create");
+  const productTabs = useMemo(
+    () => tabs.filter((tab) => !(readOnly && tab.id === "edit")),
+    [readOnly]
+  );
+
+  useEffect(() => {
+    if (!readOnly) return;
+
+    if (!["catalog", "detail"].includes(viewMode)) {
+      setViewMode("catalog");
+    }
+    if (activeTab === "edit") {
+      setActiveTab("overview");
+    }
+  }, [activeTab, readOnly, viewMode]);
 
   useEffect(() => {
     async function loadProducts() {
@@ -538,12 +553,13 @@ export default function ProductManager({ readOnly = false }) {
   function blockReadOnly(event) {
     event?.preventDefault?.();
     if (!readOnly) return false;
-    setErrorMessage("Seu perfil de Colaborador permite consulta e inclusão de novas demandas, mas não altera cadastros.");
+    setErrorMessage("Seu perfil de Colaborador permite consultar produtos e registrar pendências, mas não altera cadastros.");
     return true;
   }
 
   function openTab(tabId) {
-    if (tabs.find((tab) => tab.id === tabId)?.disabled) return;
+    const targetTab = productTabs.find((tab) => tab.id === tabId);
+    if (!targetTab || targetTab.disabled) return;
     setActiveTab(tabId);
   }
 
@@ -553,8 +569,8 @@ export default function ProductManager({ readOnly = false }) {
     }
 
     event.preventDefault();
-    const enabledTabs = tabs.filter((tab) => !tab.disabled);
-    const currentTab = tabs[currentIndex];
+    const enabledTabs = productTabs.filter((tab) => !tab.disabled);
+    const currentTab = productTabs[currentIndex];
     const enabledIndex = Math.max(0, enabledTabs.findIndex((tab) => tab.id === currentTab.id));
     let nextIndex = enabledIndex;
 
@@ -1132,8 +1148,8 @@ export default function ProductManager({ readOnly = false }) {
             <small>Índice de produtos cadastrados</small>
           </span>
         </button>
-        <button className={viewMode === "materials" ? "active" : ""} onClick={() => setViewMode("materials")} type="button"><span className="workspace-tab-icon">MP</span><span><strong>Matérias-primas</strong><small>Cadastro mestre de códigos</small></span></button>
-        <button className={viewMode === "suppliers" ? "active" : ""} onClick={() => setViewMode("suppliers")} type="button"><span className="workspace-tab-icon">SRM</span><span><strong>Fornecedores</strong><small>Produtos, materiais e relacionamento</small></span></button>
+        {!readOnly && <button className={viewMode === "materials" ? "active" : ""} onClick={() => setViewMode("materials")} type="button"><span className="workspace-tab-icon">MP</span><span><strong>Matérias-primas</strong><small>Cadastro mestre de códigos</small></span></button>}
+        {!readOnly && <button className={viewMode === "suppliers" ? "active" : ""} onClick={() => setViewMode("suppliers")} type="button"><span className="workspace-tab-icon">SRM</span><span><strong>Fornecedores</strong><small>Produtos, materiais e relacionamento</small></span></button>}
         {selectedProduct && viewMode === "detail" && (
           <button
             className={viewMode === "detail" ? "active contextual-tab" : "contextual-tab"}
@@ -1334,9 +1350,9 @@ export default function ProductManager({ readOnly = false }) {
               </div>
 
               <nav className="product-detail-nav" role="tablist" aria-label="Dados do produto">
-                {tabs.map((tab, tabIndex) => (
+                {productTabs.map((tab, tabIndex) => (
                   <button
-                    className={`${activeTab === tab.id ? "active" : ""}${tab.disabled ? " is-coming-soon" : ""}`}
+                    className={`product-tab-${tab.id}${activeTab === tab.id ? " active" : ""}${tab.disabled ? " is-coming-soon" : ""}`}
                     aria-disabled={tab.disabled || undefined}
                     aria-selected={!tab.disabled && activeTab === tab.id}
                     disabled={tab.disabled}
@@ -1488,7 +1504,7 @@ export default function ProductManager({ readOnly = false }) {
 
               {activeTab === "structure" && (
                 <section className="tab-panel" aria-label="Estrutura do produto">
-                  <div className="tab-panel-add-bar"><div><strong>Estrutura do produto</strong><span>{selectedStructureItems.length} itens vinculados</span></div><button onClick={()=>setStructureOpen(true)} type="button"><ActionIcon name="plus"/>Adicionar matéria-prima</button></div>
+                  <div className="tab-panel-add-bar"><div><strong>Estrutura do produto</strong><span>{selectedStructureItems.length} itens vinculados</span></div>{!readOnly && <button onClick={()=>setStructureOpen(true)} type="button"><ActionIcon name="plus"/>Adicionar matéria-prima</button>}</div>
 
                   <FormModal description={`O item será vinculado à estrutura de ${selectedProduct.code}.`} eyebrow="Estrutura do produto" onClose={()=>setStructureOpen(false)} open={structureOpen} title="Adicionar matéria-prima">
                     <form className="modal-form" onSubmit={addStructureItem}>
@@ -1507,14 +1523,14 @@ export default function ProductManager({ readOnly = false }) {
                           <small>{item.description}</small>
                         </span>
                         <span className="quantity-pill">{item.quantity}</span>
-                        <button
+                        {!readOnly && <button
                           className="ghost-danger-button"
                           onClick={() => deleteStructureItem(item.id)}
                           type="button"
                         >
                           <ActionIcon name="trash" />
                           Excluir
-                        </button>
+                        </button>}
                       </div>
                     ))}
 
@@ -1539,7 +1555,7 @@ export default function ProductManager({ readOnly = false }) {
                         </header>
                         <div className="issue-card-actions">
                           <span><strong>{issuePriorityLabels[issue.priority] || "Média"}</strong><small>{issue.due_date ? `Prazo ${new Date(`${issue.due_date}T12:00:00`).toLocaleDateString("pt-BR")}` : "Sem prazo definido"}</small></span>
-                          <button onClick={() => setResolutionIssue(issue)} type="button">Resolver pendência</button>
+                          {!readOnly && <button onClick={() => setResolutionIssue(issue)} type="button">Resolver pendência</button>}
                         </div>
                       </article>
                     ))}
@@ -1665,7 +1681,7 @@ export default function ProductManager({ readOnly = false }) {
 
               {activeTab === "files" && (
                 <section className="tab-panel" aria-label="Documentos do produto">
-                  <div className="tab-panel-add-bar"><div><strong>Documentos e imagens</strong><span>{selectedDocuments.length + selectedPhotos.length} arquivos anexados</span></div><button onClick={()=>setAttachmentOpen(true)} type="button"><ActionIcon name="plus"/>Adicionar arquivo</button></div>
+                  <div className="tab-panel-add-bar"><div><strong>Documentos e imagens</strong><span>{selectedDocuments.length + selectedPhotos.length} arquivos anexados</span></div>{!readOnly && <button onClick={()=>setAttachmentOpen(true)} type="button"><ActionIcon name="plus"/>Adicionar arquivo</button>}</div>
                   <FormModal description="Selecione o tipo do conteúdo e o arquivo. Fotos serão exibidas na galeria com prévia automática." eyebrow="Arquivos do produto" onClose={()=>setAttachmentOpen(false)} open={attachmentOpen} title="Adicionar documento ou foto">
                     <form className="modal-form" onSubmit={uploadAttachment}>
                       <label>Tipo de conteúdo<select value={documentType} onChange={(event) => setDocumentType(event.target.value)}>{documentTypes.map((type) => <option key={type} value={type}>{type}</option>)}</select></label>
@@ -1679,7 +1695,7 @@ export default function ProductManager({ readOnly = false }) {
                         <span className="file-symbol">{item.name.match(/\.(png|jpe?g|webp|gif)$/i) ? <img alt="" src={item.public_url} /> : <ActionIcon name="documents" />}</span>
                         <span><strong>{item.name}</strong><small>{item.file_type}</small></span>
                         <a href={item.public_url} rel="noreferrer" target="_blank"><ActionIcon name="download" />Abrir</a>
-                        <button className="attachment-delete" onClick={() => deleteAttachment(item)} type="button"><ActionIcon name="trash" />Excluir</button>
+                        {!readOnly && <button className="attachment-delete" onClick={() => deleteAttachment(item)} type="button"><ActionIcon name="trash" />Excluir</button>}
                       </article>
                     ))}
                     {selectedDocuments.length === 0 && <p className="empty-state">Nenhum documento anexado.</p>}
@@ -1693,7 +1709,7 @@ export default function ProductManager({ readOnly = false }) {
                     {selectedPhotos.map((item) => (
                       <article className="photo-card" key={item.id}>
                         <a href={item.public_url} rel="noreferrer" target="_blank"><img alt={item.name} src={item.public_url} /></a>
-                        <div><span title={item.name}>{item.name}</span><button aria-label={`Excluir ${item.name}`} onClick={() => deleteAttachment(item)} type="button"><ActionIcon name="trash" /></button></div>
+                        <div><span title={item.name}>{item.name}</span>{!readOnly && <button aria-label={`Excluir ${item.name}`} onClick={() => deleteAttachment(item)} type="button"><ActionIcon name="trash" /></button>}</div>
                       </article>
                     ))}
                     {selectedPhotos.length === 0 && <p className="empty-state">Nenhuma foto adicionada.</p>}

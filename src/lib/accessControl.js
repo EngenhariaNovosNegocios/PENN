@@ -14,6 +14,7 @@ export const ACCESS_ROLE_LABELS = Object.freeze({
 
 const knownRoles = new Set(Object.values(ACCESS_ROLES));
 const managerRoles = new Set([ACCESS_ROLES.manager, ACCESS_ROLES.admin]);
+const collaboratorPages = new Set(["overview", "products", "issues", "profile"]);
 
 export function normalizeAccessRole(role) {
   return knownRoles.has(role) ? role : ACCESS_ROLES.collaborator;
@@ -29,6 +30,10 @@ export function canCreateDemand(role) {
 
 export function canAccessPortalPage(role, pageId) {
   const normalizedRole = normalizeAccessRole(role);
+
+  if (normalizedRole === ACCESS_ROLES.collaborator) {
+    return collaboratorPages.has(pageId);
+  }
 
   if (pageId === "access") {
     return normalizedRole === ACCESS_ROLES.admin;

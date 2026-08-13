@@ -385,7 +385,9 @@ export default function UserProfileDashboard({
   }
 
   function ActivityRow({ activity, compact = false }) {
-    const actionable = activity.source !== "personal";
+    const actionable =
+      activity.source === "issue" ||
+      (activity.source === "npi" && !readOnly);
     const content = (
       <>
         <span className={`profile-task-source ${activity.source}`}>
@@ -418,10 +420,12 @@ export default function UserProfileDashboard({
           >
             <TaskIcon name="check" />
           </button>
-        ) : (
+        ) : actionable ? (
           <span className="profile-task-arrow">
             <TaskIcon name="arrow" />
           </span>
+        ) : (
+          <span className="profile-task-readonly-label">Somente leitura</span>
         )}
       </>
     );
