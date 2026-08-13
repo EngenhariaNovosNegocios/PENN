@@ -522,6 +522,17 @@ export default function NewProductsDashboard({
     setTaskNoteError("");
   }
 
+  function closeTaskDetails(task) {
+    setExpandedTaskId(null);
+    setEditingTaskNoteId(null);
+    setTaskNoteError("");
+    setTaskNotes((current) => {
+      const next = { ...current };
+      delete next[task.id];
+      return next;
+    });
+  }
+
   function editTaskNote(task) {
     setTaskNotes((current) => ({
       ...current,
@@ -760,13 +771,12 @@ export default function NewProductsDashboard({
                           {task.notes && (
                             <button
                               aria-label={`Abrir observação de ${task.title}`}
-                              className="task-note-preview"
+                              className="task-note-inline"
                               onClick={() => openTaskDetails(task)}
                               title={task.notes}
                               type="button"
                             >
-                              <span>Observação</span>
-                              <strong>{task.notes}</strong>
+                              <span>{task.notes}</span>
                             </button>
                           )}
                           {!readOnly ? (
@@ -811,6 +821,20 @@ export default function NewProductsDashboard({
 
                       {expandedTaskId === task.id && (
                         <div className="task-evidence" id={`task-details-${task.id}`}>
+                          <header className="task-evidence-heading">
+                            <div>
+                              <strong>Observações e anexos</strong>
+                              <small>{task.title}</small>
+                            </div>
+                            <button
+                              aria-label={`Fechar detalhes de ${task.title}`}
+                              onClick={() => closeTaskDetails(task)}
+                              title="Fechar"
+                              type="button"
+                            >
+                              ×
+                            </button>
+                          </header>
                           <section className="task-note-section">
                             {editingTaskNoteId === task.id ? (
                               <>

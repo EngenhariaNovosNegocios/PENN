@@ -76,6 +76,7 @@ function isOverdue(value) {
 
 export default function ManagerActivityDashboard({
   onOpenDevelopmentTask,
+  onOpenIssue,
   onOpenIssues,
 }) {
   const [data, setData] = useState({
@@ -333,7 +334,14 @@ export default function ManagerActivityDashboard({
 
             <div className={styles.resolved}>
               {data.resolvedIssues.map((issue) => (
-                <div key={issue.id}>
+                <button
+                  aria-label={`Abrir pendência resolvida: ${issue.description}`}
+                  className={styles.resolvedItem}
+                  key={issue.id}
+                  onClick={() => onOpenIssue?.({ issueId: issue.id, view: "history" })}
+                  title="Abrir no histórico de pendências"
+                  type="button"
+                >
                   <span className={styles.resolvedIcon}>
                     <ManagerIcon className={styles.icon} name="check" />
                   </span>
@@ -347,7 +355,8 @@ export default function ManagerActivityDashboard({
                       ? new Date(issue.resolved_at).toLocaleDateString("pt-BR")
                       : "-"}
                   </time>
-                </div>
+                  <ManagerIcon className={styles.resolvedArrow} name="arrow" />
+                </button>
               ))}
 
               {!loading && data.resolvedIssues.length === 0 && (

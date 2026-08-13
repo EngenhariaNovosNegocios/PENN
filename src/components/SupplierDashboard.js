@@ -529,13 +529,13 @@ export default function SupplierDashboard({ readOnly = false }) {
                         <span className="supplier-material-symbol"><SupplierIcon name="materials"/></span>
                         <div className="supplier-material-identity">
                           <strong>{material?.code || "Sem código"}</strong>
-                          <small>{material?.name || "Matéria-prima"}</small>
-                        </div>
-                        <div className="supplier-material-details">
-                          <span className="supplier-material-meta">
+                          <small title={material?.name || "Matéria-prima"}>{material?.name || "Matéria-prima"}</small>
+                          <span className="supplier-material-context">
                             <em>{category}</em>
                             <small>{uses} {uses === 1 ? "estrutura" : "estruturas"}</small>
                           </span>
+                        </div>
+                        <div className="supplier-material-details">
                           <span className="supplier-material-price"><small>Último preço</small><strong>{formatMoney(link.last_price, link.currency)}</strong></span>
                           <button className="material-commercial-trigger" onClick={() => openCommercialConditions(link)} type="button">Condições <SupplierIcon name="arrow"/></button>
                         </div>

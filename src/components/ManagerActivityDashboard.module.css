@@ -276,9 +276,9 @@
 .list button,
 .list > div,
 .projects button,
-.resolved > div {
+.resolvedItem {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 12px;
   min-height: 64px;
@@ -291,17 +291,31 @@
 }
 
 .list button,
-.projects button {
+.projects button,
+.resolvedItem {
   width: 100%;
   cursor: pointer;
+  font: inherit;
   transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
 }
 
 .list button:hover,
-.projects button:hover {
+.projects button:hover,
+.resolvedItem:hover {
   border-color: #aac4df;
   background: #f4f8fc;
   transform: translateY(-1px);
+}
+
+.resolvedItem:focus-visible {
+  outline: 3px solid rgba(44, 126, 103, 0.2);
+  outline-offset: 2px;
+}
+
+.resolvedArrow {
+  width: 16px;
+  height: 16px;
+  color: #648779;
 }
 
 .list .overdue {
@@ -463,13 +477,18 @@
   .list button,
   .list > div,
   .projects button,
-  .resolved > div {
-    grid-template-columns: auto minmax(0, 1fr);
+  .resolvedItem {
+    grid-template-columns: auto minmax(0, 1fr) auto;
   }
 
   .list time,
   .projects time,
   .resolved time {
     grid-column: 2;
+  }
+
+  .resolvedArrow {
+    grid-column: 3;
+    grid-row: 1 / 3;
   }
 }

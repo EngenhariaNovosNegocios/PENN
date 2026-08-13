@@ -77,7 +77,7 @@ export default function IssuesDashboard({
         return;
       }
 
-      setBoardView("active");
+      setBoardView(event.detail?.view === "history" ? "history" : "active");
       setPriorityFilter("todos");
       setAssigneeFilter("todos");
       setHighlightedIssueId(issueId);
@@ -89,12 +89,14 @@ export default function IssuesDashboard({
   }, []);
 
   useEffect(() => {
-    if (!highlightedIssueId || boardView !== "active") {
+    if (!highlightedIssueId) {
       return undefined;
     }
 
     const timer = window.setTimeout(() => {
-      const target = document.getElementById(`product-issue-${highlightedIssueId}`);
+      const target = document.getElementById(
+        `${boardView === "history" ? "resolved-issue" : "product-issue"}-${highlightedIssueId}`
+      );
 
       target?.focus({ preventScroll: true });
       target?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -106,6 +108,7 @@ export default function IssuesDashboard({
     highlightedIssueId,
     issueNavigationRequest,
     issues.length,
+    resolvedIssues.length,
     assigneeFilter,
     priorityFilter,
   ]);
@@ -220,7 +223,7 @@ export default function IssuesDashboard({
           ))}
           {groups.length === 0 && <div className="issues-empty"><IssueIcon name="alert"/><strong>Nenhuma pendência encontrada</strong><span>Não há ocorrências abertas com este filtro.</span></div>}
         </div></>}
-        {boardView==="history"&&<section className="resolved-issues-history"><header><div><span className="panel-kicker">Memória do produto</span><h2>Pendências resolvidas</h2></div><span>{resolvedIssues.length} registros</span></header><div>{resolvedIssues.map((issue) => { const product = products.find((item) => item.id === issue.product_id); return <article key={issue.id}><span className="resolved-check">✓</span><div><strong>{issue.description}</strong><small>{product?.code || issue.product_code} · {product?.name || "Produto"}</small><p>{issue.resolution_note}</p></div><time>{new Date(issue.resolved_at).toLocaleString("pt-BR")}</time></article>})}{resolvedIssues.length === 0 && <div className="issues-empty"><strong>Nenhuma pendência resolvida</strong><span>As resoluções aparecerão aqui automaticamente.</span></div>}</div></section>}
+        {boardView==="history"&&<section className="resolved-issues-history"><header><div><span className="panel-kicker">Memória do produto</span><h2>Pendências resolvidas</h2></div><span>{resolvedIssues.length} registros</span></header><div>{resolvedIssues.map((issue) => { const product = products.find((item) => item.id === issue.product_id); const isTargeted = Number(issue.id) === highlightedIssueId; return <article className={isTargeted ? "targeted" : ""} id={`resolved-issue-${issue.id}`} key={issue.id} tabIndex={isTargeted ? -1 : undefined}><span className="resolved-check">✓</span><div><strong>{issue.description}</strong><small>{product?.code || issue.product_code} · {product?.name || "Produto"}</small><p>{issue.resolution_note}</p></div><time>{new Date(issue.resolved_at).toLocaleString("pt-BR")}</time></article>})}{resolvedIssues.length === 0 && <div className="issues-empty"><strong>Nenhuma pendência resolvida</strong><span>As resoluções aparecerão aqui automaticamente.</span></div>}</div></section>}
       </section>
     </main>
   );
