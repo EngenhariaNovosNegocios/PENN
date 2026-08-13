@@ -122,7 +122,9 @@ function dueWeight(dueDate) {
 }
 
 export default function UserProfileDashboard({
-  canCreateDemand = true,
+  canCreateIssue = true,
+  canCreatePersonal = true,
+  onCreateIssue,
   onOpenIssue,
   onOpenDevelopmentTask,
   readOnly = false,
@@ -306,7 +308,7 @@ export default function UserProfileDashboard({
   async function createPersonal(event) {
     event.preventDefault();
 
-    if (!canCreateDemand) {
+    if (!canCreatePersonal) {
       setMessage("Seu perfil não permite registrar novas atividades.");
       return;
     }
@@ -593,13 +595,13 @@ export default function UserProfileDashboard({
                   </button>
                 ))}
               </nav>
-              {canCreateDemand && <button
+              {canCreatePersonal && <button
                 className="profile-focus-add"
                 onClick={() => setCreateOpen(true)}
                 type="button"
               >
                 <TaskIcon name="plus" />
-                Nova atividade
+                Nova tarefa pessoal
               </button>}
             </aside>
           </div>
@@ -647,22 +649,34 @@ export default function UserProfileDashboard({
             )}
           </div>
 
-          <footer className="profile-list-footer">
-            {canCreateDemand && <button onClick={() => setCreateOpen(true)} type="button">
-              <TaskIcon name="plus" />
-              Adicionar nova tarefa
-            </button>}
-            <span>Crie uma atividade pessoal para não perder nenhum acompanhamento.</span>
-          </footer>
+          {canCreateIssue && listFilter === "issue" && (
+            <footer className="profile-list-footer contextual">
+              <button onClick={() => onCreateIssue?.()} type="button">
+                <TaskIcon name="plus" />
+                Adicionar nova pendência
+              </button>
+              <span>A pendência será vinculada a um produto e a uma pessoa responsável.</span>
+            </footer>
+          )}
+
+          {canCreatePersonal && listFilter === "personal" && (
+            <footer className="profile-list-footer contextual">
+              <button onClick={() => setCreateOpen(true)} type="button">
+                <TaskIcon name="plus" />
+                Adicionar tarefa pessoal
+              </button>
+              <span>A tarefa ficará disponível somente no seu espaço de trabalho.</span>
+            </footer>
+          )}
         </section>
       )}
 
       <FormModal
         description="Esta tarefa será pessoal e aparecerá na sua visão geral e na lista de tarefas."
-        eyebrow="Nova atividade"
+        eyebrow="Atividade pessoal"
         onClose={() => setCreateOpen(false)}
         open={createOpen}
-        title="Adicionar nova tarefa"
+        title="Nova tarefa pessoal"
       >
         <form className="modal-form personal-task-modal-form" onSubmit={createPersonal}>
           <label className="wide">

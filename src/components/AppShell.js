@@ -416,6 +416,18 @@ export default function AppShell({ children }) {
     );
   }
 
+  function createIssue() {
+    if (!demandCreationAllowed || !canAccessPage(accessRole, "issues")) {
+      return;
+    }
+
+    openPage("issues");
+    window.setTimeout(
+      () => window.dispatchEvent(new CustomEvent("penn:create-issue")),
+      0
+    );
+  }
+
   return (
     <div className={`app-shell ${collapsed ? "sidebar-collapsed" : ""}`}>
       <aside className={`app-sidebar ${menuOpen ? "mobile-open" : ""}`}>
@@ -624,7 +636,9 @@ export default function AppShell({ children }) {
           {canAccessPage(accessRole, "profile") && (
             <section className="app-page" hidden={activePage !== "profile"}>
               <UserProfileDashboard
-                canCreateDemand={!readOnly}
+                canCreateIssue={demandCreationAllowed}
+                canCreatePersonal={!readOnly}
+                onCreateIssue={createIssue}
                 onOpenDevelopmentTask={openDevelopmentTask}
                 onOpenIssue={openAssignedIssue}
                 readOnly={readOnly}

@@ -101,6 +101,17 @@ export default function IssuesDashboard({
   }, []);
 
   useEffect(() => {
+    function createIssue() {
+      if (!canCreateDemand) return;
+      setIssueFile(null);
+      setRegisterOpen(true);
+    }
+
+    window.addEventListener("penn:create-issue", createIssue);
+    return () => window.removeEventListener("penn:create-issue", createIssue);
+  }, [canCreateDemand]);
+
+  useEffect(() => {
     if (!highlightedIssueId) {
       return undefined;
     }
