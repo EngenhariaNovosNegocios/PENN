@@ -527,8 +527,15 @@ export default function SupplierDashboard({ readOnly = false }) {
                     {selectedLinks.map((link) => { const material = materialById.get(link.raw_material_id); const uses = structureUseCountByCode.get(material?.code) ?? 0; const category = categoryByMaterialCode.get(material?.code) || "Matéria-prima"; return (
                       <article key={link.raw_material_id} style={categoryVisual(category)}>
                         <span className="supplier-material-symbol"><SupplierIcon name="materials"/></span>
-                        <div className="supplier-material-identity"><strong>{material?.code || "Sem código"}</strong><small>{material?.name || "Matéria-prima"}</small><em>{category}</em></div>
-                        <span className="supplier-material-price"><small>{uses} estruturas</small><strong>{formatMoney(link.last_price, link.currency)}</strong></span>
+                        <div className="supplier-material-identity">
+                          <strong>{material?.code || "Sem código"}</strong>
+                          <small title={material?.name || "Matéria-prima"}>{material?.name || "Matéria-prima"}</small>
+                          <span className="supplier-material-meta">
+                            <em>{category}</em>
+                            <small>{uses} {uses === 1 ? "estrutura" : "estruturas"}</small>
+                          </span>
+                        </div>
+                        <span className="supplier-material-price"><small>Último preço</small><strong>{formatMoney(link.last_price, link.currency)}</strong></span>
                         <button className="material-commercial-trigger" onClick={() => openCommercialConditions(link)} type="button">Condições <SupplierIcon name="arrow"/></button>
                       </article>
                     ); })}
