@@ -76,8 +76,8 @@ function isOverdue(value) {
 
 export default function ManagerActivityDashboard({
   onOpenDevelopmentTask,
-  onOpenIssue,
   onOpenIssues,
+  onOpenProduct,
 }) {
   const [data, setData] = useState({
     products: [],
@@ -335,11 +335,11 @@ export default function ManagerActivityDashboard({
             <div className={styles.resolved}>
               {data.resolvedIssues.map((issue) => (
                 <button
-                  aria-label={`Abrir pendência resolvida: ${issue.description}`}
+                  aria-label={`Abrir produto ${issue.product_code}`}
                   className={styles.resolvedItem}
                   key={issue.id}
-                  onClick={() => onOpenIssue?.({ issueId: issue.id, view: "history" })}
-                  title="Abrir no histórico de pendências"
+                  onClick={() => onOpenProduct?.(issue.product_id)}
+                  title="Abrir o produto e consultar seu histórico"
                   type="button"
                 >
                   <span className={styles.resolvedIcon}>

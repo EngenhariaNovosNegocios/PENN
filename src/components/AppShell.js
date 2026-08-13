@@ -611,8 +611,8 @@ export default function AppShell({ children }) {
             <section className="app-page" hidden={activePage !== "manager"}>
               <ManagerActivityDashboard
                 onOpenDevelopmentTask={openDevelopmentTask}
-                onOpenIssue={openAssignedIssue}
                 onOpenIssues={() => openPage("issues")}
+                onOpenProduct={openProduct}
               />
             </section>
           )}

@@ -5514,3 +5514,33 @@ button.profile-task-open:focus-visible {
   box-shadow: inset 4px 0 #278674, 0 8px 20px rgba(31, 112, 88, .09);
   outline: none;
 }
+
+.resolved-issues-history article.clickable {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  cursor: pointer;
+  transition: border-color .16s ease, background .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+
+.resolved-issues-history article.clickable:hover {
+  border-color: #8fc5b5;
+  background: #f0faf7;
+  box-shadow: 0 8px 18px rgba(31, 112, 88, .08);
+  transform: translateY(-1px);
+}
+
+.resolved-issues-history article.clickable:focus-visible {
+  outline: 3px solid rgba(39, 134, 116, .2);
+  outline-offset: 2px;
+}
+
+.resolved-issues-history article.clickable > svg {
+  align-self: center;
+  width: 17px;
+  color: #5f887c;
+}
+
+@media (max-width: 760px) {
+  .resolved-issues-history article.clickable { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .resolved-issues-history article.clickable time { grid-column: 2; }
+  .resolved-issues-history article.clickable > svg { grid-column: 3; grid-row: 1 / 3; }
+}

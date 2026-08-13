@@ -19,6 +19,7 @@ function IssueIcon({ name }) {
     plus: <path d="M12 5v14M5 12h14"/>,
     calendar: <><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></>,
     box: <><path d="m21 8-9 5-9-5"/><path d="M3 8l9-5 9 5v8l-9 5-9-5Z"/></>,
+    arrow: <path d="m9 18 6-6-6-6"/>,
   };
   return <svg aria-hidden="true" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8">{paths[name]}</svg>;
 }
@@ -223,7 +224,7 @@ export default function IssuesDashboard({
           ))}
           {groups.length === 0 && <div className="issues-empty"><IssueIcon name="alert"/><strong>Nenhuma pendência encontrada</strong><span>Não há ocorrências abertas com este filtro.</span></div>}
         </div></>}
-        {boardView==="history"&&<section className="resolved-issues-history"><header><div><span className="panel-kicker">Memória do produto</span><h2>Pendências resolvidas</h2></div><span>{resolvedIssues.length} registros</span></header><div>{resolvedIssues.map((issue) => { const product = products.find((item) => item.id === issue.product_id); const isTargeted = Number(issue.id) === highlightedIssueId; return <article className={isTargeted ? "targeted" : ""} id={`resolved-issue-${issue.id}`} key={issue.id} tabIndex={isTargeted ? -1 : undefined}><span className="resolved-check">✓</span><div><strong>{issue.description}</strong><small>{product?.code || issue.product_code} · {product?.name || "Produto"}</small><p>{issue.resolution_note}</p></div><time>{new Date(issue.resolved_at).toLocaleString("pt-BR")}</time></article>})}{resolvedIssues.length === 0 && <div className="issues-empty"><strong>Nenhuma pendência resolvida</strong><span>As resoluções aparecerão aqui automaticamente.</span></div>}</div></section>}
+        {boardView==="history"&&<section className="resolved-issues-history"><header><div><span className="panel-kicker">Memória do produto</span><h2>Pendências resolvidas</h2></div><span>{resolvedIssues.length} registros</span></header><div>{resolvedIssues.map((issue) => { const product = products.find((item) => item.id === issue.product_id); const isTargeted = Number(issue.id) === highlightedIssueId; const openResolvedProduct = () => onOpenProduct?.(issue.product_id); return <article aria-label={`Abrir produto ${product?.code || issue.product_code}`} className={`${isTargeted ? "targeted " : ""}clickable`} id={`resolved-issue-${issue.id}`} key={issue.id} onClick={openResolvedProduct} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openResolvedProduct(); } }} role="button" tabIndex={0} title="Abrir o produto e consultar seu histórico"><span className="resolved-check">✓</span><div><strong>{issue.description}</strong><small>{product?.code || issue.product_code} · {product?.name || "Produto"}</small><p>{issue.resolution_note}</p></div><time>{new Date(issue.resolved_at).toLocaleString("pt-BR")}</time><IssueIcon name="arrow"/></article>})}{resolvedIssues.length === 0 && <div className="issues-empty"><strong>Nenhuma pendência resolvida</strong><span>As resoluções aparecerão aqui automaticamente.</span></div>}</div></section>}
       </section>
     </main>
   );
