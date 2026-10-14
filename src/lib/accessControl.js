@@ -43,5 +43,9 @@ export function canAccessPortalPage(role, pageId) {
     return managerRoles.has(normalizedRole);
   }
 
+  if (pageId === "project-management") {
+    return canEditOperations(normalizedRole);
+  }
+
   return true;
 }

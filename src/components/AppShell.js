@@ -3,6 +3,7 @@
 import { cloneElement, isValidElement, useEffect, useMemo, useState } from "react";
 import OverviewDashboard from "@/components/OverviewDashboard";
 import NewProductsDashboard from "@/components/NewProductsDashboard";
+import ProjectManagementDashboard from "@/components/ProjectManagementDashboard";
 import IssuesDashboard from "@/components/IssuesDashboard";
 import StrategicIntelligenceDashboard from "@/components/StrategicIntelligenceDashboard";
 import UserProfileDashboard from "@/components/UserProfileDashboard";
@@ -24,6 +25,7 @@ const pageTitles = {
   overview: "Visão geral",
   products: "Produtos",
   "new-products": "Novos produtos",
+  "project-management": "Projetos",
   intelligence: "Inteligência NPI",
   issues: "Pendências",
   manager: "Gerência",
@@ -84,6 +86,14 @@ const Icon = ({ name }) => {
       <>
         <path d="m12 3 1.4 4.6L18 9l-4.6 1.4L12 15l-1.4-4.6L6 9l4.6-1.4Z" />
         <path d="M19 16v6M16 19h6" />
+      </>
+    ),
+    kanban: (
+      <>
+        <rect x="3" y="4" width="18" height="16" rx="2" />
+        <path d="M9 4v16M15 4v16" />
+        <path d="M6 8h1.5M12 8h1.5M18 8h0" />
+        <path d="M6 13h1.5M12 13h1.5" />
       </>
     ),
     brain: (
@@ -169,6 +179,7 @@ const navigation = [
   { id: "overview", label: "Visão geral", icon: "grid" },
   { id: "products", label: "Produtos", icon: "box" },
   { id: "new-products", label: "Novos produtos", icon: "spark" },
+  { id: "project-management", label: "Projetos", icon: "kanban" },
   { id: "issues", label: "Pendências", icon: "alert" },
   { id: "manager", label: "Gerência", icon: "manager" },
   { id: "access", label: "Acessos", icon: "users" },
@@ -605,6 +616,18 @@ export default function AppShell({ children }) {
             <section className="app-page" hidden={activePage !== "new-products"}>
               <NewProductsDashboard
                 canCreateDemand={demandCreationAllowed}
+                readOnly={readOnly}
+              />
+            </section>
+          )}
+          {canAccessPage(accessRole, "project-management") && (
+            <section
+              className="app-page"
+              hidden={activePage !== "project-management"}
+            >
+              <ProjectManagementDashboard
+                onOpenDevelopmentTask={openDevelopmentTask}
+                onOpenProduct={openProduct}
                 readOnly={readOnly}
               />
             </section>
